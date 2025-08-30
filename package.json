@@ -1,0 +1,42 @@
+{
+  "name": "luna_iot_server",
+  "version": "1.0.0",
+  "description": "This is a server of Luna Iot",
+  "keywords": [
+    "Luna",
+    "Iot"
+  ],
+  "license": "ISC",
+  "author": "Ravi Pangali",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:generate": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.12.0",
+    "aws-sdk": "^2.1692.0",
+    "axios": "^1.11.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "elasticsearch": "^16.7.3",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "gt06x22": "^1.0.10",
+    "moment-timezone": "^0.6.0",
+    "multer": "^2.0.2",
+    "multer-s3": "^3.0.1",
+    "mysql2": "^3.14.2",
+    "net": "^1.0.2",
+    "prisma": "^6.12.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

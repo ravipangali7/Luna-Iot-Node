@@ -1,0 +1,398 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum GeofenceType {
+  Entry
+  Exit
+}
+
+enum NotificationType {
+  all
+  specific
+}
+
+enum SimType {
+  NTC
+  Ncell
+}
+
+enum ProtocolType {
+  GT06
+  FMB003
+}
+
+enum DeviceModelType {
+  EC08
+  VL149
+}
+
+enum VehicleType {
+  Ambulance
+  Bike
+  Boat
+  Bulldozer
+  Bus
+  Car
+  Crane
+  Cycle
+  Dumper
+  Garbage
+  Jcb
+  Jeep
+  Mixer
+  Mpv
+  Pickup
+  SchoolBus
+  Suv
+  Tanker
+  Tempo
+  Tractor
+  Train
+  Truck
+  Van
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PermissionType {
+  // Device permissions
+  DEVICE_READ
+  DEVICE_CREATE
+  DEVICE_UPDATE
+  DEVICE_DELETE
+
+  // Vehicle permissions
+  VEHICLE_READ
+  VEHICLE_CREATE
+  VEHICLE_UPDATE
+  VEHICLE_DELETE
+
+  // Location permissions
+  LOCATION_READ
+  LOCATION_HISTORY
+
+  // Status permissions
+  STATUS_READ
+  STATUS_HISTORY
+
+  // User management permissions
+  USER_READ
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+
+  // Role management permissions
+  ROLE_READ
+  ROLE_CREATE
+  ROLE_UPDATE
+  ROLE_DELETE
+
+  // System permissions
+  SYSTEM_ADMIN
+  DEVICE_MONITORING
+  LIVE_TRACKING
+}
+
+// User model
+model User {
+  id       Int        @id @default(autoincrement())
+  name     String     @db.VarChar(100)
+  phone    String     @unique @db.VarChar(100)
+  password String     @db.VarChar(255)
+  token    String?    @unique @db.VarChar(500)
+  fcmToken String?    @map("fcm_token") @db.VarChar(500)
+  status   UserStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  role   Role @relation("UserRole", fields: [roleId], references: [id])
+  roleId Int  @map("role_id")
+
+  userDevices       UserDevice[]       @relation("UserDevices")
+  userVehicles      UserVehicle[]      @relation("UserVehicles")
+  // Notification relations
+  sentNotifications Notification[]     @relation("NotificationSender")
+  userNotifications UserNotification[] @relation("UserNotifications")
+  geofences         GeofenceUser[]     @relation("GeofenceUsers")
+
+  @@index([phone, token, status])
+  @@map("users")
+}
+
+// Role model
+model Role {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique @db.VarChar(100)
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users       User[]           @relation("UserRole")
+  permissions RolePermission[] @relation("RolePermissions")
+
+  @@map("roles")
+}
+
+// Permission model
+model Permission {
+  id          Int            @id @default(autoincrement())
+  name        PermissionType @unique
+  description String?        @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roles RolePermission[] @relation("RolePermissions")
+
+  @@map("permissions")
+}
+
+// Role-Permission junction table
+model RolePermission {
+  id           Int        @id @default(autoincrement())
+  role         Role       @relation("RolePermissions", fields: [roleId], references: [id], onDelete: Cascade)
+  roleId       Int        @map("role_id")
+  permission   Permission @relation("RolePermissions", fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId Int        @map("permission_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Device {
+  id       Int             @id @default(autoincrement())
+  imei     String          @unique @db.Char(15)
+  phone    String          @db.VarChar(20)
+  sim      SimType
+  protocol ProtocolType    @default(GT06)
+  iccid    String          @db.VarChar(255)
+  model    DeviceModelType
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  locations   Location[]   @relation("DeviceLocations")
+  statuses    Status[]     @relation("DeviceStatuses")
+  vehicles    Vehicle[]    @relation("DeviceVehicles")
+  userDevices UserDevice[] @relation("UserDevices")
+
+  @@map("devices")
+}
+
+model Vehicle {
+  id          Int         @id @default(autoincrement())
+  imei        String      @unique @db.Char(15)
+  device      Device      @relation("DeviceVehicles", fields: [imei], references: [imei], onDelete: Cascade)
+  name        String      @db.VarChar(255)
+  vehicleNo   String      @map("vehicle_no") @db.VarChar(255)
+  vehicleType VehicleType @default(Car) @map("vehicle_type")
+  odometer    Decimal     @db.Decimal(10, 2)
+  mileage     Decimal     @db.Decimal(10, 2)
+  minimumFuel Decimal     @map("minimum_fuel") @db.Decimal(10, 2)
+  speedLimit  Int         @default(60) @map("speed_limit")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  userVehicles UserVehicle[]     @relation("UserVehicles")
+  geofences    GeofenceVehicle[] @relation("GeofenceVehicles")
+
+  @@map("vehicles")
+}
+
+model Location {
+  id          Int      @id @default(autoincrement())
+  device      Device   @relation("DeviceLocations", fields: [imei], references: [imei], onDelete: Cascade)
+  imei        String   @db.Char(15)
+  latitude    Decimal  @db.Decimal(10, 8)
+  longitude   Decimal  @db.Decimal(11, 8)
+  speed       Int
+  course      Int
+  realTimeGps Boolean  @map("real_time_gps")
+  satellite   Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([imei])
+  @@index([createdAt])
+  @@index([latitude, longitude])
+  @@map("locations")
+}
+
+model Status {
+  id        Int      @id @default(autoincrement())
+  device    Device   @relation("DeviceStatuses", fields: [imei], references: [imei], onDelete: Cascade)
+  imei      String   @db.Char(15)
+  battery   Int
+  signal    Int
+  ignition  Boolean
+  charging  Boolean
+  relay     Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([imei])
+  @@index([createdAt])
+  @@map("statuses")
+}
+
+// User-Device junction table
+model UserDevice {
+  id       Int    @id @default(autoincrement())
+  user     User   @relation("UserDevices", fields: [userId], references: [id], onDelete: Cascade)
+  userId   Int    @map("user_id")
+  device   Device @relation("UserDevices", fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId Int    @map("device_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, deviceId])
+  @@map("user_devices")
+}
+
+// User-Vehicle junction table
+model UserVehicle {
+  id        Int     @id @default(autoincrement())
+  user      User    @relation("UserVehicles", fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int     @map("user_id")
+  vehicle   Vehicle @relation("UserVehicles", fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId Int     @map("vehicle_id")
+  isMain    Boolean @default(false) @map("is_main")
+
+  // Vehicle-specific permissions
+  allAccess      Boolean @default(false) @map("all_access")
+  liveTracking   Boolean @default(false) @map("live_tracking")
+  history        Boolean @default(false)
+  report         Boolean @default(false)
+  vehicleProfile Boolean @default(false) @map("vehicle_profile")
+  events         Boolean @default(false)
+  geofence       Boolean @default(false)
+  edit           Boolean @default(false)
+  shareTracking  Boolean @default(false) @map("share_tracking")
+  notification   Boolean @default(true) // Add this line - default to true for existing users
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, vehicleId])
+  @@map("user_vehicles")
+}
+
+model Otp {
+  id        Int      @id @default(autoincrement())
+  phone     String   @db.VarChar(100)
+  otp       String   @db.VarChar(6)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@map("otps")
+}
+
+// Notification models
+model Notification {
+  id       Int              @id @default(autoincrement())
+  title    String           @db.VarChar(255)
+  message  String           @db.Text
+  type     NotificationType
+  sentBy   User             @relation("NotificationSender", fields: [sentById], references: [id])
+  sentById Int              @map("sent_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userNotifications UserNotification[] @relation("NotificationUsers")
+
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+model UserNotification {
+  id             Int          @id @default(autoincrement())
+  user           User         @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int          @map("user_id")
+  notification   Notification @relation("NotificationUsers", fields: [notificationId], references: [id], onDelete: Cascade)
+  notificationId Int          @map("notification_id")
+  isRead         Boolean      @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, notificationId])
+  @@index([userId, isRead])
+  @@map("user_notifications")
+}
+
+// Geofence model
+model Geofence {
+  id       Int          @id @default(autoincrement())
+  title    String       @db.VarChar(255)
+  type     GeofenceType
+  boundary Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  vehicles GeofenceVehicle[] @relation("GeofenceVehicles")
+  users    GeofenceUser[]    @relation("GeofenceUsers")
+
+  @@map("geofences")
+}
+
+// Geofence-Vehicle junction table
+model GeofenceVehicle {
+  id         Int      @id @default(autoincrement())
+  geofence   Geofence @relation("GeofenceVehicles", fields: [geofenceId], references: [id], onDelete: Cascade)
+  geofenceId Int      @map("geofence_id")
+  vehicle    Vehicle  @relation("GeofenceVehicles", fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId  Int      @map("vehicle_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([geofenceId, vehicleId])
+  @@map("geofence_vehicles")
+}
+
+// Geofence-User junction table
+model GeofenceUser {
+  id         Int      @id @default(autoincrement())
+  geofence   Geofence @relation("GeofenceUsers", fields: [geofenceId], references: [id], onDelete: Cascade)
+  geofenceId Int      @map("geofence_id")
+  user       User     @relation("GeofenceUsers", fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int      @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([geofenceId, userId])
+  @@map("geofence_users")
+}
+
+model Popup {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.VarChar(255)
+  message   String   @db.Text
+  image     String?  @db.VarChar(500)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("popups")
+}
