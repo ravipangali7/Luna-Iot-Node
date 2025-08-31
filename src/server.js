@@ -6,7 +6,7 @@ const express = require('express');
 const { errorMiddleware } = require('./api/middleware/error_middleware');
 const socketService = require('./socket/socket_service');
 const AuthMiddleware = require('./api/middleware/auth_middleware');
-// const corsMiddleware = require('./api/middleware/cors_middleware');
+const corsMiddleware = require('./api/middleware/cors_middleware');
 const otpCleanupService = require('./utils/otp_cleanup_service');
 const path = require('path');
 require('dotenv').config();
@@ -60,7 +60,7 @@ app.use(cors({
 
 // API Routes
 app.use('/uploads', express.static(`/home/luna/luna_iot/Luna-Iot/uploads`));
-// app.use(corsMiddleware.corsMiddleware);
+app.use(corsMiddleware.corsMiddleware);
 
 app.get('/', (req, res) => {
     res.json({
