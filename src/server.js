@@ -10,6 +10,7 @@ const AuthMiddleware = require('./api/middleware/auth_middleware');
 const otpCleanupService = require('./utils/otp_cleanup_service');
 const path = require('path');
 require('dotenv').config();
+const cors = require('cors');
 
 
 // PORTS 
