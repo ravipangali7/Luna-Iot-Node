@@ -6,7 +6,7 @@ const express = require('express');
 const { errorMiddleware } = require('./api/middleware/error_middleware');
 const socketService = require('./socket/socket_service');
 const AuthMiddleware = require('./api/middleware/auth_middleware');
-const corsMiddleware = require('./api/middleware/cors_middleware');
+// const corsMiddleware = require('./api/middleware/cors_middleware');
 const otpCleanupService = require('./utils/otp_cleanup_service');
 const path = require('path');
 require('dotenv').config();
@@ -33,11 +33,33 @@ const relayRoutes = require('./api/routes/relay_routes');
 const app = express();
 app.use(express.json());
 
+// CORS
+const allowedOrigins = [
+    'https://app.mylunago.com',
+    'http://app.mylunago.com',
+    'http://5.189.159.178:7070',  
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin like mobile apps
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    credentials: true
+}));
+
 
 
 // API Routes
 app.use('/uploads', express.static(`/home/luna/luna_iot/Luna-Iot/uploads`));
-app.use(corsMiddleware.corsMiddleware);
+// app.use(corsMiddleware.corsMiddleware);
 
 app.get('/', (req, res) => {
     res.json({
@@ -70,11 +92,11 @@ if (cluster.isMaster) {
     // This block runs in the master process
     console.log(`Master process ${process.pid} is running`);
 
-    
+
     // Start OTP cleanup service in master process
     otpCleanupService.startCleanupScheduler();
 
-    
+
     // Fork workers (one per CPU core)
     for (let i = 0; i < numCPUs; i++) {
         cluster.fork(); // Create a new worker
