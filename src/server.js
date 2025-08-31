@@ -6,7 +6,6 @@ const express = require('express');
 const { errorMiddleware } = require('./api/middleware/error_middleware');
 const socketService = require('./socket/socket_service');
 const AuthMiddleware = require('./api/middleware/auth_middleware');
-const corsMiddleware = require('./api/middleware/cors_middleware');
 const otpCleanupService = require('./utils/otp_cleanup_service');
 const path = require('path');
 require('dotenv').config();
@@ -56,11 +55,25 @@ app.use(cors({
     credentials: true
 }));
 
+app.use(
+    (req, res, next) => {
+        res.header('Access-Control-Allow-Origin', 'https://app.mylunago.com');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-phone, x-token');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    
+        if (req.method === 'OPTIONS') {
+            res.sendStatus(200);
+        } else {
+            next();
+        }
+    }
+);
+
 
 
 // API Routes
 app.use('/uploads', express.static(`/home/luna/luna_iot/Luna-Iot/uploads`));
-app.use(corsMiddleware.corsMiddleware);
 
 app.get('/', (req, res) => {
     res.json({
