@@ -42,7 +42,6 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        // allow requests with no origin like mobile apps
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
@@ -51,24 +50,9 @@ app.use(cors({
         return callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'x-phone', 'x-token'],
     credentials: true
 }));
-
-app.use(
-    (req, res, next) => {
-        res.header('Access-Control-Allow-Origin', 'https://app.mylunago.com');
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-phone, x-token');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    
-        if (req.method === 'OPTIONS') {
-            res.sendStatus(200);
-        } else {
-            next();
-        }
-    }
-);
 
 
 
