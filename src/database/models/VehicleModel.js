@@ -120,44 +120,86 @@ class VehicleModel {
             
             // Super Admin: all vehicles
             if (userRole === 'Super Admin') {
-                vehicles = await prisma.getClient().vehicle.findMany();
-            } 
-            // Dealer: vehicles from assigned devices + directly assigned vehicles
-            else if (userRole === 'Dealer') {
-                // Get vehicles that are directly assigned to the dealer
-                const directVehicles = await prisma.getClient().vehicle.findMany({
-                    where: {
+                vehicles = await prisma.getClient().vehicle.findMany({
+                    include: {
                         userVehicles: {
-                            some: {
-                                userId: userId
+                            where: { userId },
+                            select: { 
+                                isMain: true, 
+                                allAccess: true,
+                                liveTracking: true,
+                                history: true,
+                                report: true,
+                                vehicleProfile: true,
+                                events: true,
+                                geofence: true,
+                                edit: true,
+                                shareTracking: true,
+                                notification: true
                             }
                         }
                     }
                 });
-
-                // Get devices assigned to the dealer
-                const dealerDevices = await prisma.getClient().device.findMany({
-                    where: {
-                        userDevices: {
-                            some: {
-                                userId: userId
+            }
+            // Dealer: vehicles through device assignment + direct assignment
+            else if (userRole === 'Dealer') {
+                const [directVehicles, deviceVehicles] = await Promise.all([
+                    // Direct vehicle assignments
+                    prisma.getClient().vehicle.findMany({
+                        where: {
+                            userVehicles: {
+                                some: { userId }
+                            }
+                        },
+                        include: {
+                            userVehicles: {
+                                where: { userId },
+                                select: { 
+                                    isMain: true, 
+                                    allAccess: true,
+                                    liveTracking: true,
+                                    history: true,
+                                    report: true,
+                                    vehicleProfile: true,
+                                    events: true,
+                                    geofence: true,
+                                    edit: true,
+                                    shareTracking: true,
+                                    notification: true
+                                }
                             }
                         }
-                    },
-                    select: {
-                        imei: true
-                    }
-                });
-
-                // Get vehicles that belong to dealer's devices
-                const deviceVehicles = await prisma.getClient().vehicle.findMany({
-                    where: {
-                        imei: {
-                            in: dealerDevices.map(device => device.imei)
+                    }),
+                    // Vehicles through device assignment
+                    prisma.getClient().vehicle.findMany({
+                        where: {
+                            device: {
+                                userDevices: {
+                                    some: { userId }
+                                }
+                            }
+                        },
+                        include: {
+                            userVehicles: {
+                                where: { userId },
+                                select: { 
+                                    isMain: true, 
+                                    allAccess: true,
+                                    liveTracking: true,
+                                    history: true,
+                                    report: true,
+                                    vehicleProfile: true,
+                                    events: true,
+                                    geofence: true,
+                                    edit: true,
+                                    shareTracking: true,
+                                    notification: true
+                                }
+                            }
                         }
-                    }
-                });
-
+                    })
+                ]);
+    
                 // Combine and remove duplicates
                 const allVehicles = [...directVehicles, ...deviceVehicles];
                 vehicles = allVehicles.filter((vehicle, index, self) =>
@@ -169,60 +211,219 @@ class VehicleModel {
                 vehicles = await prisma.getClient().vehicle.findMany({
                     where: {
                         userVehicles: {
-                            some: {
-                                userId: userId
+                            some: { userId }
+                        }
+                    },
+                    include: {
+                        userVehicles: {
+                            where: { userId },
+                            select: { 
+                                isMain: true, 
+                                allAccess: true,
+                                liveTracking: true,
+                                history: true,
+                                report: true,
+                                vehicleProfile: true,
+                                events: true,
+                                geofence: true,
+                                edit: true,
+                                shareTracking: true,
+                                notification: true
                             }
                         }
                     }
                 });
             }
-
-            // Add complete data to each vehicle
-            const vehiclesWithData = await Promise.all(
-                vehicles.map(async (vehicle) => {
-                    const [latestStatus, latestLocation, todayLocationData, userVehicle] = await Promise.all([
-                        prisma.getClient().status.findFirst({
-                            where: { imei: vehicle.imei },
-                            orderBy: { createdAt: 'desc' }
-                        }),
-                        prisma.getClient().location.findFirst({
-                            where: { imei: vehicle.imei },
-                            orderBy: { createdAt: 'desc' }
-                        }),
-                        this.getTodayLocationData(vehicle.imei),
-                        prisma.getClient().userVehicle.findFirst({
-                            where: {
-                                vehicleId: vehicle.id,
-                                userId: userId
-                            }
-                        })
-                    ]);
-
-                    // Calculate today's kilometers
-                    const todayKm = calculateDistanceFromLocationData(todayLocationData);
-
-                    // Determine ownership type
-                    let ownershipType = 'Customer';
-                    if (userVehicle) {
-                        ownershipType = userVehicle.isMain ? 'Own' : 'Shared';
+    
+            // OPTIMIZED: Get all latest data in batch queries instead of N+1
+            const imeis = vehicles.map(v => v.imei);
+            
+            // Get latest status for all vehicles in one query
+            const latestStatuses = await prisma.getClient().status.findMany({
+                where: {
+                    imei: { in: imeis }
+                },
+                orderBy: { createdAt: 'desc' },
+                distinct: ['imei']
+            });
+    
+            // Get latest location for all vehicles in one query
+            const latestLocations = await prisma.getClient().location.findMany({
+                where: {
+                    imei: { in: imeis }
+                },
+                orderBy: { createdAt: 'desc' },
+                distinct: ['imei']
+            });
+    
+            // Get today's location data for all vehicles in one query
+            const today = new Date();
+            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+            
+            const todayLocationData = await prisma.getClient().location.findMany({
+                where: {
+                    imei: { in: imeis },
+                    createdAt: {
+                        gte: startOfDay,
+                        lte: endOfDay
                     }
-
-                    return {
-                        ...vehicle,
-                        latestStatus,
-                        latestLocation,
-                        todayKm,
-                        ownershipType,
-                        userVehicle: userVehicle || null
-                    };
-                })
-            );
-
+                },
+                orderBy: { createdAt: 'asc' }
+            });
+    
+            // Create lookup maps for O(1) access
+            const statusMap = new Map(latestStatuses.map(s => [s.imei, s]));
+            const locationMap = new Map(latestLocations.map(l => [l.imei, l]));
+            const todayDataMap = new Map();
+            
+            // Group today's data by IMEI
+            todayLocationData.forEach(loc => {
+                if (!todayDataMap.has(loc.imei)) {
+                    todayDataMap.set(loc.imei, []);
+                }
+                todayDataMap.get(loc.imei).push(loc);
+            });
+    
+            // Combine data efficiently
+            const vehiclesWithData = vehicles.map(vehicle => {
+                const latestStatus = statusMap.get(vehicle.imei);
+                const latestLocation = locationMap.get(vehicle.imei);
+                const todayLocationData = todayDataMap.get(vehicle.imei) || [];
+                const userVehicle = vehicle.userVehicles[0] || null;
+    
+                // Calculate today's kilometers
+                const todayKm = calculateDistanceFromLocationData(todayLocationData);
+    
+                // Determine ownership type
+                let ownershipType = 'Customer';
+                if (userVehicle) {
+                    ownershipType = userVehicle.isMain ? 'Own' : 'Shared';
+                }
+    
+                return {
+                    ...vehicle,
+                    latestStatus,
+                    latestLocation,
+                    todayKm: Math.round(todayKm * 100) / 100,
+                    ownershipType,
+                    userVehicle
+                };
+            });
+    
             return vehiclesWithData;
         } catch (error) {
-            console.error('ERROR FETCHING ALL VEHICLES WITH COMPLETE DATA: ', error);
+            console.error('ERROR FETCHING VEHICLES WITH COMPLETE DATA: ', error);
             throw error;
         }
+        // try {
+        //     let vehicles;
+            
+        //     // Super Admin: all vehicles
+        //     if (userRole === 'Super Admin') {
+        //         vehicles = await prisma.getClient().vehicle.findMany();
+        //     } 
+        //     // Dealer: vehicles from assigned devices + directly assigned vehicles
+        //     else if (userRole === 'Dealer') {
+        //         // Get vehicles that are directly assigned to the dealer
+        //         const directVehicles = await prisma.getClient().vehicle.findMany({
+        //             where: {
+        //                 userVehicles: {
+        //                     some: {
+        //                         userId: userId
+        //                     }
+        //                 }
+        //             }
+        //         });
+
+        //         // Get devices assigned to the dealer
+        //         const dealerDevices = await prisma.getClient().device.findMany({
+        //             where: {
+        //                 userDevices: {
+        //                     some: {
+        //                         userId: userId
+        //                     }
+        //                 }
+        //             },
+        //             select: {
+        //                 imei: true
+        //             }
+        //         });
+
+        //         // Get vehicles that belong to dealer's devices
+        //         const deviceVehicles = await prisma.getClient().vehicle.findMany({
+        //             where: {
+        //                 imei: {
+        //                     in: dealerDevices.map(device => device.imei)
+        //                 }
+        //             }
+        //         });
+
+        //         // Combine and remove duplicates
+        //         const allVehicles = [...directVehicles, ...deviceVehicles];
+        //         vehicles = allVehicles.filter((vehicle, index, self) =>
+        //             index === self.findIndex(v => v.imei === vehicle.imei)
+        //         );
+        //     } 
+        //     // Customer: only directly assigned vehicles
+        //     else {
+        //         vehicles = await prisma.getClient().vehicle.findMany({
+        //             where: {
+        //                 userVehicles: {
+        //                     some: {
+        //                         userId: userId
+        //                     }
+        //                 }
+        //             }
+        //         });
+        //     }
+
+        //     // Add complete data to each vehicle
+        //     const vehiclesWithData = await Promise.all(
+        //         vehicles.map(async (vehicle) => {
+        //             const [latestStatus, latestLocation, todayLocationData, userVehicle] = await Promise.all([
+        //                 prisma.getClient().status.findFirst({
+        //                     where: { imei: vehicle.imei },
+        //                     orderBy: { createdAt: 'desc' }
+        //                 }),
+        //                 prisma.getClient().location.findFirst({
+        //                     where: { imei: vehicle.imei },
+        //                     orderBy: { createdAt: 'desc' }
+        //                 }),
+        //                 this.getTodayLocationData(vehicle.imei),
+        //                 prisma.getClient().userVehicle.findFirst({
+        //                     where: {
+        //                         vehicleId: vehicle.id,
+        //                         userId: userId
+        //                     }
+        //                 })
+        //             ]);
+
+        //             // Calculate today's kilometers
+        //             const todayKm = calculateDistanceFromLocationData(todayLocationData);
+
+        //             // Determine ownership type
+        //             let ownershipType = 'Customer';
+        //             if (userVehicle) {
+        //                 ownershipType = userVehicle.isMain ? 'Own' : 'Shared';
+        //             }
+
+        //             return {
+        //                 ...vehicle,
+        //                 latestStatus,
+        //                 latestLocation,
+        //                 todayKm,
+        //                 ownershipType,
+        //                 userVehicle: userVehicle || null
+        //             };
+        //         })
+        //     );
+
+        //     return vehiclesWithData;
+        // } catch (error) {
+        //     console.error('ERROR FETCHING ALL VEHICLES WITH COMPLETE DATA: ', error);
+        //     throw error;
+        // }
     }
 
     // Get vehicle by IMEI with complete data and role-based access

@@ -218,6 +218,9 @@ model Vehicle {
   userVehicles UserVehicle[]     @relation("UserVehicles")
   geofences    GeofenceVehicle[] @relation("GeofenceVehicles")
 
+  @@index([imei]) // For IMEI lookups
+  @@index([vehicleType]) // For vehicle type filtering
+  @@index([createdAt])
   @@map("vehicles")
 }
 
@@ -233,9 +236,11 @@ model Location {
   satellite   Int
   createdAt   DateTime @default(now()) @map("created_at")
 
-  @@index([imei])
+  // @@index([imei, createdAt(sort: Desc)])  
+  @@index([imei, createdAt])
   @@index([createdAt])
   @@index([latitude, longitude])
+  @@index([speed])
   @@map("locations")
 }
 
@@ -250,8 +255,11 @@ model Status {
   relay     Boolean
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([imei])
+  // @@index([imei, createdAt(sort: Desc)])  
+  @@index([imei, createdAt])
+  @@index([imei, ignition])
   @@index([createdAt])
+  @@index([battery])
   @@map("statuses")
 }
 
@@ -293,6 +301,9 @@ model UserVehicle {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, vehicleId])
+  @@index([userId]) // For user's vehicles
+  @@index([vehicleId]) // For vehicle's users
+  @@index([userId, isMain])
   @@map("user_vehicles")
 }
 

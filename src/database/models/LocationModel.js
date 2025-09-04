@@ -99,79 +99,259 @@ class LocationModel {
     }
 
     // Get combined history data (location + status with ignition off)
+    // async getCombinedHistoryByDateRange(imei, startDate, endDate) {
+    //     imei = imei.toString();
+    //     try {
+    //         // Get location data with strict date filtering
+    //         const locations = await prisma.getClient().location.findMany({
+    //             where: {
+    //                 imei,
+    //                 createdAt: {
+    //                     gte: startDate,
+    //                     lte: endDate
+    //                 }
+    //             },
+    //             orderBy: {
+    //                 createdAt: 'asc'
+    //             }
+    //         });
+    
+            
+    //         // Get status data with strict date filtering
+    //         const statuses = await prisma.getClient().status.findMany({
+    //             where: {
+    //                 imei,
+    //                 ignition: false,
+    //                 createdAt: {
+    //                     gte: startDate,
+    //                     lte: endDate
+    //                 }
+    //             },
+    //             orderBy: {
+    //                 createdAt: 'asc'
+    //             }
+    //         });
+    
+    //         console.log(`Found ${statuses.length} status records`);
+    
+    //         // CRITICAL: Double-check dates and log any out-of-range data
+    //         const outOfRangeLocations = locations.filter(loc => {
+    //             const locDate = new Date(loc.createdAt);
+    //             return locDate < startDate || locDate > endDate;
+    //         });
+    
+    //         const outOfRangeStatuses = statuses.filter(status => {
+    //             const statusDate = new Date(status.createdAt);
+    //             return statusDate < startDate || statusDate > endDate;
+    //         });
+    
+    //         if (outOfRangeLocations.length > 0) {
+    //             console.log(`WARNING: ${outOfRangeLocations.length} location records outside range:`);
+    //             outOfRangeLocations.slice(0, 3).forEach(loc => {
+    //                 console.log(`  - ${loc.createdAt} (${loc.imei})`);
+    //             });
+    //         }
+    
+    //         if (outOfRangeStatuses.length > 0) {
+    //             console.log(`WARNING: ${outOfRangeStatuses.length} status records outside range:`);
+    //             outOfRangeStatuses.slice(0, 3).forEach(status => {
+    //                 console.log(`  - ${status.createdAt} (${status.imei})`);
+    //             });
+    //         }
+    
+    //         // Combine and sort by createdAt
+    //         const combinedData = [
+    //             ...locations.map(loc => ({
+    //                 ...loc,
+    //                 type: 'location',
+    //                 dataType: 'location'
+    //             })),
+    //             ...statuses.map(status => ({
+    //                 ...status,
+    //                 type: 'status',
+    //                 dataType: 'status'
+    //             }))
+    //         ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    //         return combinedData;
+    //     } catch (error) {
+    //         console.error('ERROR FETCHING COMBINED HISTORY: ', error);
+    //         throw error;
+    //     }
+    // }
+    async generateReportData(imei, startDate, endDate) {
+        imei = imei.toString();
+        try {
+            // Use raw SQL for complex aggregations instead of loading all data
+            const stats = await prisma.getClient().$queryRaw`
+                SELECT 
+                    COUNT(*) as total_records,
+                    AVG(speed) as avg_speed,
+                    MAX(speed) as max_speed,
+                    MIN(speed) as min_speed,
+                    SUM(CASE WHEN speed > 80 THEN 1 ELSE 0 END) as overspeed_count,
+                    COUNT(CASE WHEN speed > 0 THEN 1 END) as moving_records,
+                    COUNT(CASE WHEN speed = 0 THEN 1 END) as stopped_records
+                FROM locations 
+                WHERE imei = ${imei} 
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+            `;
+    
+            // Get status statistics using SQL
+            const statusStats = await prisma.getClient().$queryRaw`
+                SELECT 
+                    COUNT(*) as total_status_records,
+                    AVG(battery) as avg_battery,
+                    MIN(battery) as min_battery,
+                    MAX(battery) as max_battery,
+                    AVG(signal) as avg_signal,
+                    COUNT(CASE WHEN ignition = 1 THEN 1 END) as ignition_on_count,
+                    COUNT(CASE WHEN ignition = 0 THEN 1 END) as ignition_off_count,
+                    COUNT(CASE WHEN charging = 1 THEN 1 END) as charging_count,
+                    COUNT(CASE WHEN relay = 1 THEN 1 END) as relay_on_count
+                FROM statuses 
+                WHERE imei = ${imei} 
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+            `;
+    
+            // Get daily aggregated data using SQL
+            const dailyData = await prisma.getClient().$queryRaw`
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as location_count,
+                    AVG(speed) as avg_speed,
+                    MAX(speed) as max_speed,
+                    MIN(speed) as min_speed,
+                    COUNT(CASE WHEN speed > 80 THEN 1 END) as overspeed_count,
+                    COUNT(CASE WHEN speed > 0 THEN 1 END) as moving_count,
+                    COUNT(CASE WHEN speed = 0 THEN 1 END) as stopped_count
+                FROM locations 
+                WHERE imei = ${imei} 
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+                GROUP BY DATE(created_at)
+                ORDER BY date ASC
+            `;
+    
+            // Get hourly data for the first day to show detailed pattern
+            const hourlyData = await prisma.getClient().$queryRaw`
+                SELECT 
+                    HOUR(created_at) as hour,
+                    COUNT(*) as location_count,
+                    AVG(speed) as avg_speed,
+                    MAX(speed) as max_speed
+                FROM locations 
+                WHERE imei = ${imei} 
+                AND DATE(created_at) = DATE(${startDate})
+                GROUP BY HOUR(created_at)
+                ORDER BY hour ASC
+            `;
+    
+            // Calculate total distance using optimized SQL (if needed)
+            const distanceData = await prisma.getClient().$queryRaw`
+                SELECT 
+                    latitude,
+                    longitude,
+                    created_at
+                FROM locations 
+                WHERE imei = ${imei} 
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+                ORDER BY created_at ASC
+            `;
+    
+            // Calculate distance in JavaScript (only for final result)
+            let totalKm = 0;
+            for (let i = 1; i < distanceData.length; i++) {
+                const prev = distanceData[i - 1];
+                const curr = distanceData[i];
+                if (prev.latitude && prev.longitude && curr.latitude && curr.longitude) {
+                    const distance = this.calculateDistance(
+                        parseFloat(prev.latitude), parseFloat(prev.longitude),
+                        parseFloat(curr.latitude), parseFloat(curr.longitude)
+                    );
+                    totalKm += distance;
+                }
+            }
+    
+            return {
+                stats: {
+                    ...stats[0],
+                    ...statusStats[0],
+                    totalKm: Math.round(totalKm * 100) / 100
+                },
+                dailyData: dailyData.map(day => ({
+                    date: day.date.toISOString().split('T')[0],
+                    locationCount: parseInt(day.location_count),
+                    avgSpeed: Math.round(parseFloat(day.avg_speed) * 10) / 10,
+                    maxSpeed: parseInt(day.max_speed),
+                    minSpeed: parseInt(day.min_speed),
+                    overspeedCount: parseInt(day.overspeed_count),
+                    movingCount: parseInt(day.moving_count),
+                    stoppedCount: parseInt(day.stopped_count)
+                })),
+                hourlyData: hourlyData.map(hour => ({
+                    hour: parseInt(hour.hour),
+                    locationCount: parseInt(hour.location_count),
+                    avgSpeed: Math.round(parseFloat(hour.avg_speed) * 10) / 10,
+                    maxSpeed: parseInt(hour.max_speed)
+                }))
+            };
+        } catch (error) {
+            console.error('ERROR GENERATING REPORT DATA: ', error);
+            throw error;
+        }
+    }
+    
+    // OPTIMIZED: Get combined history with SQL aggregation
     async getCombinedHistoryByDateRange(imei, startDate, endDate) {
         imei = imei.toString();
         try {
-            // Get location data with strict date filtering
-            const locations = await prisma.getClient().location.findMany({
-                where: {
+            // Use SQL UNION to combine location and status data efficiently
+            const combinedData = await prisma.getClient().$queryRaw`
+                SELECT 
+                    'location' as type,
+                    id,
                     imei,
-                    createdAt: {
-                        gte: startDate,
-                        lte: endDate
-                    }
-                },
-                orderBy: {
-                    createdAt: 'asc'
-                }
-            });
-    
-            
-            // Get status data with strict date filtering
-            const statuses = await prisma.getClient().status.findMany({
-                where: {
+                    latitude,
+                    longitude,
+                    speed,
+                    course,
+                    real_time_gps as realTimeGps,
+                    satellite,
+                    created_at as createdAt,
+                    NULL as battery,
+                    NULL as signal,
+                    NULL as ignition,
+                    NULL as charging,
+                    NULL as relay
+                FROM locations 
+                WHERE imei = ${imei} 
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+                
+                UNION ALL
+                
+                SELECT 
+                    'status' as type,
+                    id,
                     imei,
-                    ignition: false,
-                    createdAt: {
-                        gte: startDate,
-                        lte: endDate
-                    }
-                },
-                orderBy: {
-                    createdAt: 'asc'
-                }
-            });
-    
-            console.log(`Found ${statuses.length} status records`);
-    
-            // CRITICAL: Double-check dates and log any out-of-range data
-            const outOfRangeLocations = locations.filter(loc => {
-                const locDate = new Date(loc.createdAt);
-                return locDate < startDate || locDate > endDate;
-            });
-    
-            const outOfRangeStatuses = statuses.filter(status => {
-                const statusDate = new Date(status.createdAt);
-                return statusDate < startDate || statusDate > endDate;
-            });
-    
-            if (outOfRangeLocations.length > 0) {
-                console.log(`WARNING: ${outOfRangeLocations.length} location records outside range:`);
-                outOfRangeLocations.slice(0, 3).forEach(loc => {
-                    console.log(`  - ${loc.createdAt} (${loc.imei})`);
-                });
-            }
-    
-            if (outOfRangeStatuses.length > 0) {
-                console.log(`WARNING: ${outOfRangeStatuses.length} status records outside range:`);
-                outOfRangeStatuses.slice(0, 3).forEach(status => {
-                    console.log(`  - ${status.createdAt} (${status.imei})`);
-                });
-            }
-    
-            // Combine and sort by createdAt
-            const combinedData = [
-                ...locations.map(loc => ({
-                    ...loc,
-                    type: 'location',
-                    dataType: 'location'
-                })),
-                ...statuses.map(status => ({
-                    ...status,
-                    type: 'status',
-                    dataType: 'status'
-                }))
-            ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                    NULL as latitude,
+                    NULL as longitude,
+                    NULL as speed,
+                    NULL as course,
+                    NULL as realTimeGps,
+                    NULL as satellite,
+                    created_at as createdAt,
+                    battery,
+                    signal,
+                    ignition,
+                    charging,
+                    relay
+                FROM statuses 
+                WHERE imei = ${imei} 
+                AND ignition = 0
+                AND created_at BETWEEN ${startDate} AND ${endDate}
+                
+                ORDER BY created_at ASC
+            `;
     
             return combinedData;
         } catch (error) {
@@ -183,56 +363,56 @@ class LocationModel {
 
     // ------ Report --------
     // Generate comprehensive report data
-    async generateReportData(imei, startDate, endDate) {
-        imei = imei.toString();
-        try {
-            // Get all location data for the date range
-            const locations = await prisma.getClient().location.findMany({
-                where: {
-                    imei,
-                    createdAt: {
-                        gte: startDate,
-                        lte: endDate
-                    }
-                },
-                orderBy: {
-                    createdAt: 'asc'
-                }
-            });
+    // async generateReportData(imei, startDate, endDate) {
+    //     imei = imei.toString();
+    //     try {
+    //         // Get all location data for the date range
+    //         const locations = await prisma.getClient().location.findMany({
+    //             where: {
+    //                 imei,
+    //                 createdAt: {
+    //                     gte: startDate,
+    //                     lte: endDate
+    //                 }
+    //             },
+    //             orderBy: {
+    //                 createdAt: 'asc'
+    //             }
+    //         });
 
-            // Get all status data for the date range
-            const statuses = await prisma.getClient().status.findMany({
-                where: {
-                    imei,
-                    createdAt: {
-                        gte: startDate,
-                        lte: endDate
-                    }
-                },
-                orderBy: {
-                    createdAt: 'asc'
-                }
-            });
+    //         // Get all status data for the date range
+    //         const statuses = await prisma.getClient().status.findMany({
+    //             where: {
+    //                 imei,
+    //                 createdAt: {
+    //                     gte: startDate,
+    //                     lte: endDate
+    //                 }
+    //             },
+    //             orderBy: {
+    //                 createdAt: 'asc'
+    //             }
+    //         });
 
-            // Calculate statistics
-            const stats = this.calculateReportStats(locations, statuses);
+    //         // Calculate statistics
+    //         const stats = this.calculateReportStats(locations, statuses);
 
-            // Generate daily data for charts
-            const dailyData = this.generateDailyData(locations, startDate, endDate);
+    //         // Generate daily data for charts
+    //         const dailyData = this.generateDailyData(locations, startDate, endDate);
 
-            return {
-                stats,
-                dailyData,
-                rawData: {
-                    locations,
-                    statuses
-                }
-            };
-        } catch (error) {
-            console.error('ERROR GENERATING REPORT DATA: ', error);
-            throw error;
-        }
-    }
+    //         return {
+    //             stats,
+    //             dailyData,
+    //             rawData: {
+    //                 locations,
+    //                 statuses
+    //             }
+    //         };
+    //     } catch (error) {
+    //         console.error('ERROR GENERATING REPORT DATA: ', error);
+    //         throw error;
+    //     }
+    // }
 
     // Calculate report statistics
     calculateReportStats(locations, statuses) {
