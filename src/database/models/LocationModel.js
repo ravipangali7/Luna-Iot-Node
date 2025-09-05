@@ -196,7 +196,7 @@ class LocationModel {
                 WHERE imei = ${imei} 
                 AND created_at BETWEEN ${startDate} AND ${endDate}
             `;
-
+    
             // Get status statistics using SQL
             const statusStats = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -204,7 +204,7 @@ class LocationModel {
                     AVG(battery) as avg_battery,
                     MIN(battery) as min_battery,
                     MAX(battery) as max_battery,
-                    AVG(signal) as avg_signal,
+                    AVG(\`signal\`) as avg_signal,
                     COUNT(CASE WHEN ignition = 1 THEN 1 END) as ignition_on_count,
                     COUNT(CASE WHEN ignition = 0 THEN 1 END) as ignition_off_count,
                     COUNT(CASE WHEN charging = 1 THEN 1 END) as charging_count,
@@ -213,7 +213,7 @@ class LocationModel {
                 WHERE imei = ${imei} 
                 AND created_at BETWEEN ${startDate} AND ${endDate}
             `;
-
+    
             // Get daily aggregated data using SQL
             const dailyData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -231,7 +231,7 @@ class LocationModel {
                 GROUP BY DATE(created_at)
                 ORDER BY date ASC
             `;
-
+    
             // Get hourly data for the first day to show detailed pattern
             const hourlyData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -245,7 +245,7 @@ class LocationModel {
                 GROUP BY HOUR(created_at)
                 ORDER BY hour ASC
             `;
-
+    
             // Calculate total distance using optimized SQL (if needed)
             const distanceData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -257,7 +257,7 @@ class LocationModel {
                 AND created_at BETWEEN ${startDate} AND ${endDate}
                 ORDER BY created_at ASC
             `;
-
+    
             // Calculate distance in JavaScript (only for final result)
             let totalKm = 0;
             for (let i = 1; i < distanceData.length; i++) {
@@ -271,7 +271,7 @@ class LocationModel {
                     totalKm += distance;
                 }
             }
-
+    
             return {
                 stats: {
                     ...stats[0],
