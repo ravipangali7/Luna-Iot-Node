@@ -115,8 +115,8 @@ class LocationModel {
     //                 createdAt: 'asc'
     //             }
     //         });
-    
-            
+
+
     //         // Get status data with strict date filtering
     //         const statuses = await prisma.getClient().status.findMany({
     //             where: {
@@ -131,34 +131,34 @@ class LocationModel {
     //                 createdAt: 'asc'
     //             }
     //         });
-    
+
     //         console.log(`Found ${statuses.length} status records`);
-    
+
     //         // CRITICAL: Double-check dates and log any out-of-range data
     //         const outOfRangeLocations = locations.filter(loc => {
     //             const locDate = new Date(loc.createdAt);
     //             return locDate < startDate || locDate > endDate;
     //         });
-    
+
     //         const outOfRangeStatuses = statuses.filter(status => {
     //             const statusDate = new Date(status.createdAt);
     //             return statusDate < startDate || statusDate > endDate;
     //         });
-    
+
     //         if (outOfRangeLocations.length > 0) {
     //             console.log(`WARNING: ${outOfRangeLocations.length} location records outside range:`);
     //             outOfRangeLocations.slice(0, 3).forEach(loc => {
     //                 console.log(`  - ${loc.createdAt} (${loc.imei})`);
     //             });
     //         }
-    
+
     //         if (outOfRangeStatuses.length > 0) {
     //             console.log(`WARNING: ${outOfRangeStatuses.length} status records outside range:`);
     //             outOfRangeStatuses.slice(0, 3).forEach(status => {
     //                 console.log(`  - ${status.createdAt} (${status.imei})`);
     //             });
     //         }
-    
+
     //         // Combine and sort by createdAt
     //         const combinedData = [
     //             ...locations.map(loc => ({
@@ -172,7 +172,7 @@ class LocationModel {
     //                 dataType: 'status'
     //             }))
     //         ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    
+
     //         return combinedData;
     //     } catch (error) {
     //         console.error('ERROR FETCHING COMBINED HISTORY: ', error);
@@ -196,7 +196,7 @@ class LocationModel {
                 WHERE imei = ${imei} 
                 AND created_at BETWEEN ${startDate} AND ${endDate}
             `;
-    
+
             // Get status statistics using SQL
             const statusStats = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -213,7 +213,7 @@ class LocationModel {
                 WHERE imei = ${imei} 
                 AND created_at BETWEEN ${startDate} AND ${endDate}
             `;
-    
+
             // Get daily aggregated data using SQL
             const dailyData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -231,7 +231,7 @@ class LocationModel {
                 GROUP BY DATE(created_at)
                 ORDER BY date ASC
             `;
-    
+
             // Get hourly data for the first day to show detailed pattern
             const hourlyData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -245,7 +245,7 @@ class LocationModel {
                 GROUP BY HOUR(created_at)
                 ORDER BY hour ASC
             `;
-    
+
             // Calculate total distance using optimized SQL (if needed)
             const distanceData = await prisma.getClient().$queryRaw`
                 SELECT 
@@ -257,7 +257,7 @@ class LocationModel {
                 AND created_at BETWEEN ${startDate} AND ${endDate}
                 ORDER BY created_at ASC
             `;
-    
+
             // Calculate distance in JavaScript (only for final result)
             let totalKm = 0;
             for (let i = 1; i < distanceData.length; i++) {
@@ -271,7 +271,7 @@ class LocationModel {
                     totalKm += distance;
                 }
             }
-    
+
             return {
                 stats: {
                     ...stats[0],
@@ -300,58 +300,58 @@ class LocationModel {
             throw error;
         }
     }
-    
+
     async getCombinedHistoryByDateRange(imei, startDate, endDate) {
         imei = imei.toString();
         try {
             // Use SQL UNION to combine location and status data efficiently
             const combinedData = await prisma.getClient().$queryRaw`
-                SELECT 
-                    'location' as type,
-                    id,
-                    imei,
-                    latitude,
-                    longitude,
-                    speed,
-                    course,
-                    real_time_gps as realTimeGps,
-                    satellite,
-                    created_at as createdAt,
-                    NULL as battery,
-                    NULL as \`signal\`,
-                    NULL as ignition,
-                    NULL as charging,
-                    NULL as relay
-                FROM locations 
-                WHERE imei = ${imei} 
-                AND created_at BETWEEN ${startDate} AND ${endDate}
-                
-                UNION ALL
-                
-                SELECT 
-                    'status' as type,
-                    id,
-                    imei,
-                    NULL as latitude,
-                    NULL as longitude,
-                    NULL as speed,
-                    NULL as course,
-                    NULL as realTimeGps,
-                    NULL as satellite,
-                    created_at as createdAt,
-                    battery,
-                    \`signal\`,
-                    ignition,
-                    charging,
-                    relay
-                FROM statuses 
-                WHERE imei = ${imei} 
-                AND ignition = 0
-                AND created_at BETWEEN ${startDate} AND ${endDate}
-                
-                ORDER BY created_at ASC
-            `;
-    
+            SELECT 
+                'location' as type,
+                id,
+                imei,
+                latitude,
+                longitude,
+                speed,
+                course,
+                real_time_gps as realTimeGps,
+                satellite,
+                created_at as createdAt,
+                NULL as battery,
+                NULL as \`signal\`,
+                NULL as ignition,
+                NULL as charging,
+                NULL as relay
+            FROM locations 
+            WHERE imei = ${imei} 
+            AND created_at BETWEEN ${startDate} AND ${endDate}
+            
+            UNION ALL
+            
+            SELECT 
+                'status' as type,
+                id,
+                imei,
+                NULL as latitude,
+                NULL as longitude,
+                NULL as speed,
+                NULL as course,
+                NULL as realTimeGps,
+                NULL as satellite,
+                created_at as createdAt,
+                battery,
+                \`signal\`,
+                ignition,
+                charging,
+                relay
+            FROM statuses 
+            WHERE imei = ${imei} 
+            AND ignition = 0
+            AND created_at BETWEEN ${startDate} AND ${endDate}
+            
+            ORDER BY createdAt ASC
+        `;
+
             return combinedData;
         } catch (error) {
             console.error('ERROR FETCHING COMBINED HISTORY: ', error);
