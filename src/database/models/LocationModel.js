@@ -272,27 +272,49 @@ class LocationModel {
                 }
             }
     
+            // Convert BigInt values to regular numbers
+            const convertBigInt = (value) => {
+                if (typeof value === 'bigint') {
+                    return Number(value);
+                }
+                return value;
+            };
+    
             return {
                 stats: {
-                    ...stats[0],
-                    ...statusStats[0],
+                    total_records: convertBigInt(stats[0].total_records),
+                    avg_speed: convertBigInt(stats[0].avg_speed),
+                    max_speed: convertBigInt(stats[0].max_speed),
+                    min_speed: convertBigInt(stats[0].min_speed),
+                    overspeed_count: convertBigInt(stats[0].overspeed_count),
+                    moving_records: convertBigInt(stats[0].moving_records),
+                    stopped_records: convertBigInt(stats[0].stopped_records),
+                    total_status_records: convertBigInt(statusStats[0].total_status_records),
+                    avg_battery: convertBigInt(statusStats[0].avg_battery),
+                    min_battery: convertBigInt(statusStats[0].min_battery),
+                    max_battery: convertBigInt(statusStats[0].max_battery),
+                    avg_signal: convertBigInt(statusStats[0].avg_signal),
+                    ignition_on_count: convertBigInt(statusStats[0].ignition_on_count),
+                    ignition_off_count: convertBigInt(statusStats[0].ignition_off_count),
+                    charging_count: convertBigInt(statusStats[0].charging_count),
+                    relay_on_count: convertBigInt(statusStats[0].relay_on_count),
                     totalKm: Math.round(totalKm * 100) / 100
                 },
                 dailyData: dailyData.map(day => ({
                     date: day.date.toISOString().split('T')[0],
-                    locationCount: parseInt(day.location_count),
-                    avgSpeed: Math.round(parseFloat(day.avg_speed) * 10) / 10,
-                    maxSpeed: parseInt(day.max_speed),
-                    minSpeed: parseInt(day.min_speed),
-                    overspeedCount: parseInt(day.overspeed_count),
-                    movingCount: parseInt(day.moving_count),
-                    stoppedCount: parseInt(day.stopped_count)
+                    locationCount: convertBigInt(day.location_count),
+                    avgSpeed: Math.round(parseFloat(convertBigInt(day.avg_speed)) * 10) / 10,
+                    maxSpeed: convertBigInt(day.max_speed),
+                    minSpeed: convertBigInt(day.min_speed),
+                    overspeedCount: convertBigInt(day.overspeed_count),
+                    movingCount: convertBigInt(day.moving_count),
+                    stoppedCount: convertBigInt(day.stopped_count)
                 })),
                 hourlyData: hourlyData.map(hour => ({
-                    hour: parseInt(hour.hour),
-                    locationCount: parseInt(hour.location_count),
-                    avgSpeed: Math.round(parseFloat(hour.avg_speed) * 10) / 10,
-                    maxSpeed: parseInt(hour.max_speed)
+                    hour: convertBigInt(hour.hour),
+                    locationCount: convertBigInt(hour.location_count),
+                    avgSpeed: Math.round(parseFloat(convertBigInt(hour.avg_speed)) * 10) / 10,
+                    maxSpeed: convertBigInt(hour.max_speed)
                 }))
             };
         } catch (error) {
