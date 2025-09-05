@@ -301,7 +301,6 @@ class LocationModel {
         }
     }
     
-    // OPTIMIZED: Get combined history with SQL aggregation
     async getCombinedHistoryByDateRange(imei, startDate, endDate) {
         imei = imei.toString();
         try {
@@ -319,7 +318,7 @@ class LocationModel {
                     satellite,
                     created_at as createdAt,
                     NULL as battery,
-                    NULL as signal,
+                    NULL as \`signal\`,
                     NULL as ignition,
                     NULL as charging,
                     NULL as relay
@@ -341,7 +340,7 @@ class LocationModel {
                     NULL as satellite,
                     created_at as createdAt,
                     battery,
-                    signal,
+                    \`signal\`,
                     ignition,
                     charging,
                     relay
