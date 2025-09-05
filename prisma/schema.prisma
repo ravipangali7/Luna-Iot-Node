@@ -185,7 +185,7 @@ model Device {
   phone    String          @db.VarChar(20)
   sim      SimType
   protocol ProtocolType    @default(GT06)
-  iccid    String          @db.VarChar(255)
+  iccid    String?         @default("") @db.VarChar(255)
   model    DeviceModelType
 
   createdAt DateTime @default(now()) @map("created_at")
