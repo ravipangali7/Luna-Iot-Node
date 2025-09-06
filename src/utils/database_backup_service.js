@@ -173,7 +173,7 @@ class DatabaseBackupService {
         // Then run on schedule
         setInterval(async () => {
             await this.runBackupProcess();
-        }, intervalHours * 60 * 60 * 1000); // Convert hours to milliseconds
+        }, intervalHours * 60 * 1000); // Convert hours to milliseconds
     }
 }
 
