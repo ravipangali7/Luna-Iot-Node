@@ -46,31 +46,17 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        console.log('CORS Origin:', origin);
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            console.log('CORS Rejected Origin:', origin);
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
         }
-        console.log('CORS Allowed Origin:', origin);
         return callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'x-phone', 'x-token', 'Accept'],
-    credentials: true,
-    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+    allowedHeaders: ['Authorization', 'Content-Type', 'x-phone', 'x-token'],
+    credentials: true
 }));
-
-// Handle preflight requests explicitly
-app.options('*', (req, res) => {
-    console.log('OPTIONS request received for:', req.url);
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, x-phone, x-token, Accept');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.sendStatus(200);
-});
 
 
 
