@@ -37,6 +37,8 @@ app.use(express.json());
 const allowedOrigins = [
     'https://app.mylunago.com',
     'http://app.mylunago.com',
+    'https://system.mylunago.com',
+    'http://system.mylunago.com',
     'http://38.54.71.218:7070',
     'http://38.54.71.218:5173',
     'http://localhost:5173'  
