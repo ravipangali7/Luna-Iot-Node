@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
 class EmailService {
     constructor() {
@@ -8,37 +9,56 @@ class EmailService {
 
     initializeTransporter() {
         try {
-            this.transporter = nodemailer.createTransporter({
-                host: 'smtp.gmail.com',
-                port: 587,
+            // Use environment variables with fallback to hardcoded values
+            const smtpConfig = {
+                host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                port: parseInt(process.env.SMTP_PORT) || 587,
                 secure: false, // true for 465, false for other ports
                 auth: {
-                    user: "legendromeoravi@gmail.com",
-                    pass: "anpyvnntbfemcguk"
+                    user: process.env.SMTP_USER || "legendromeoravi@gmail.com",
+                    pass: process.env.SMTP_PASS || "anpyvnntbfemcguk"
                 }
+            };
+
+            console.log('Initializing email transporter with config:', {
+                host: smtpConfig.host,
+                port: smtpConfig.port,
+                user: smtpConfig.auth.user
             });
+
+            this.transporter = nodemailer.createTransporter(smtpConfig);
 
             // Verify connection configuration
             this.transporter.verify((error, success) => {
                 if (error) {
                     console.error('SMTP configuration error:', error);
+                    this.transporter = null; // Reset transporter on error
                 } else {
                     console.log('SMTP server is ready to take our messages');
                 }
             });
         } catch (error) {
             console.error('Email service initialization error:', error);
+            this.transporter = null;
         }
     }
 
     async sendEmail(to, subject, text, html, attachments = []) {
         try {
             if (!this.transporter) {
-                throw new Error('Email transporter not initialized');
+                console.error('Email transporter not initialized, attempting to reinitialize...');
+                this.initializeTransporter();
+                
+                // Wait a moment for initialization
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                if (!this.transporter) {
+                    throw new Error('Email transporter not initialized after retry');
+                }
             }
 
             const mailOptions = {
-                from: "legendromeoravi@gmail.com",
+                from: process.env.SMTP_FROM || process.env.SMTP_USER || "legendromeoravi@gmail.com",
                 to: to,
                 subject: subject,
                 text: text,
@@ -46,6 +66,7 @@ class EmailService {
                 attachments: attachments
             };
 
+            console.log('Sending email to:', to);
             const result = await this.transporter.sendMail(mailOptions);
             console.log('Email sent successfully:', result.messageId);
             return { success: true, messageId: result.messageId };
