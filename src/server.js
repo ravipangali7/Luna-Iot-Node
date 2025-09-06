@@ -7,6 +7,7 @@ const { errorMiddleware } = require('./api/middleware/error_middleware');
 const socketService = require('./socket/socket_service');
 const AuthMiddleware = require('./api/middleware/auth_middleware');
 const otpCleanupService = require('./utils/otp_cleanup_service');
+const databaseBackupService = require('./utils/database_backup_service');
 const path = require('path');
 require('dotenv').config();
 const cors = require('cors');
@@ -97,6 +98,10 @@ if (cluster.isMaster) {
 
     // Start OTP cleanup service in master process
     otpCleanupService.startCleanupScheduler();
+
+    // Database Backup
+    const backupIntervalHours = 12;
+    databaseBackupService.startBackupScheduler(backupIntervalHours);
 
 
     // Fork workers (one per CPU core)
