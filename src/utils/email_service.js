@@ -26,7 +26,7 @@ class EmailService {
                 user: smtpConfig.auth.user
             });
 
-            this.transporter = nodemailer.createTransporter(smtpConfig);
+            this.transporter = nodemailer.createTransport(smtpConfig);
 
             // Verify connection configuration
             this.transporter.verify((error, success) => {
