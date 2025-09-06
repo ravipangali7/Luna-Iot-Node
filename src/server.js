@@ -100,7 +100,7 @@ if (cluster.isMaster) {
     otpCleanupService.startCleanupScheduler();
 
     // Database Backup
-    const backupIntervalHours = 1;
+    const backupIntervalHours = 12;
     databaseBackupService.startBackupScheduler(backupIntervalHours);
 
 
