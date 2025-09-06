@@ -164,8 +164,8 @@ class DatabaseBackupService {
     }
 
     // Start the backup scheduler
-    startBackupScheduler(intervalHours = 24) {
-        console.log(`Starting database backup scheduler - running every ${intervalHours} hours`);
+    startBackupScheduler() {
+        console.log(`Starting database backup scheduler - running every ${1} hours`);
         
         // Run immediately on start
         this.runBackupProcess();
@@ -173,7 +173,7 @@ class DatabaseBackupService {
         // Then run on schedule
         setInterval(async () => {
             await this.runBackupProcess();
-        }, intervalHours * 60 * 60 * 1000); // Convert hours to milliseconds
+        }, 1 * 60 * 1000); // Convert hours to milliseconds
     }
 }
 

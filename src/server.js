@@ -100,8 +100,7 @@ if (cluster.isMaster) {
     otpCleanupService.startCleanupScheduler();
 
     // Database Backup
-    const backupIntervalHours = 12;
-    databaseBackupService.startBackupScheduler(backupIntervalHours);
+    databaseBackupService.startBackupScheduler();
 
 
     // Fork workers (one per CPU core)
