@@ -13,7 +13,7 @@ class DatabaseBackupService {
             password: '214fa86d5dfe4729',
             database: 'luna_iot'
         };
-        this.recipientEmails = ['lunatracking@gmail.com'];
+        this.recipientEmails = ['lunatracking@gmail.com', 'mylunago@gmail.com', 'sumankaicho@gmail.com'];
         
         this.ensureBackupDirectory();
     }
