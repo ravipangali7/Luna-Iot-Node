@@ -48,6 +48,13 @@ class BloodDonationController {
     // Create new blood donation
     static async createBloodDonation(req, res) {
         try {
+            console.log('Blood donation request body:', req.body);
+            console.log('Request headers:', req.headers);
+            
+            if (!req.body) {
+                return errorResponse(res, 'Request body is required', 400);
+            }
+            
             const { name, phone, address, bloodGroup, applyType, lastDonatedAt } = req.body;
             
             // Validate required fields
