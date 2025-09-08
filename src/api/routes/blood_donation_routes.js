@@ -13,9 +13,6 @@ router.use(corsMiddleware);
 router.get('/blood-donation', BloodDonationController.getAllBloodDonations);
 router.get('/blood-donation/:id', BloodDonationController.getBloodDonationById);
 router.post('/blood-donation/create', (req, res, next) => {
-    console.log('POST /blood-donation/create - Request received');
-    console.log('Body:', req.body);
-    console.log('Headers:', req.headers);
     next();
 }, BloodDonationController.createBloodDonation);
 router.put('/blood-donation/update/:id', BloodDonationController.updateBloodDonation);
