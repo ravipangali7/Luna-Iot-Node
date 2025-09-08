@@ -13,6 +13,7 @@ class BloodDonationModel {
                     address: data.address,
                     bloodGroup: data.bloodGroup,
                     applyType: data.applyType,
+                    status: data.status || false,
                     lastDonatedAt: data.lastDonatedAt ? new Date(data.lastDonatedAt) : null,
                     createdAt: nepalTime,
                     updatedAt: nepalTime
@@ -85,7 +86,7 @@ class BloodDonationModel {
     async updateData(id, data) {
         try {
             const nepalTime = datetimeService.nepalTimeDate();
-            const allowedFields = ['name', 'phone', 'address', 'bloodGroup', 'applyType', 'lastDonatedAt'];
+            const allowedFields = ['name', 'phone', 'address', 'bloodGroup', 'applyType', 'status', 'lastDonatedAt'];
             const updateData = {};
 
             for (const [key, value] of Object.entries(data)) {
