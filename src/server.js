@@ -73,6 +73,7 @@ app.get('/', (req, res) => {
     });
 });
 app.use('/api/auth', authRoutes);
+app.use('/api', bloodDonationRoutes);
 app.use('/api', AuthMiddleware.verifyToken, roleRoutes);
 app.use('/api', AuthMiddleware.verifyToken, notificationRoutes);
 app.use('/api', AuthMiddleware.verifyToken, userRoutes);
@@ -83,7 +84,6 @@ app.use('/api', AuthMiddleware.verifyToken, vehicleRoutes);
 app.use('/api', AuthMiddleware.verifyToken, geofenceRoutes);
 app.use('/api', AuthMiddleware.verifyToken, popupRoutes);
 app.use('/api', relayRoutes);
-app.use('/api', bloodDonationRoutes);
 
 // Middleware
 app.use(errorMiddleware);
