@@ -420,12 +420,14 @@ model BloodDonation {
   address        String               @db.Text
   bloodGroup     String               @db.VarChar(10)
   applyType      BloodDonationApplyType @map("apply_type")
+  status         Boolean              @default(false)
   lastDonatedAt  DateTime?            @map("last_donated_at")
   createdAt      DateTime             @default(now()) @map("created_at")
   updatedAt      DateTime             @updatedAt @map("updated_at")
 
   @@index([applyType])
   @@index([bloodGroup])
+  @@index([status])
   @@index([createdAt])
   @@map("blood_donations")
 }

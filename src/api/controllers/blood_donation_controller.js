@@ -55,7 +55,7 @@ class BloodDonationController {
                 return errorResponse(res, 'Request body is required', 400);
             }
             
-            const { name, phone, address, bloodGroup, applyType, lastDonatedAt } = req.body;
+            const { name, phone, address, bloodGroup, applyType, status, lastDonatedAt } = req.body;
             
             // Validate required fields
             if (!name || !phone || !address || !bloodGroup || !applyType) {
@@ -80,6 +80,7 @@ class BloodDonationController {
                 address: address.trim(),
                 bloodGroup: bloodGroup.trim(),
                 applyType: applyType.trim(),
+                status: status || false,
                 lastDonatedAt: lastDonatedAt
             });
             
