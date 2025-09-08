@@ -67,6 +67,11 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum BloodDonationApplyType {
+  need
+  donate
+}
+
 enum PermissionType {
   // Device permissions
   DEVICE_READ
@@ -406,4 +411,21 @@ model Popup {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("popups")
+}
+
+model BloodDonation {
+  id             Int                  @id @default(autoincrement())
+  name           String               @db.VarChar(255)
+  phone          String               @db.VarChar(20)
+  address        String               @db.Text
+  bloodGroup     String               @db.VarChar(10)
+  applyType      BloodDonationApplyType @map("apply_type")
+  lastDonatedAt  DateTime?            @map("last_donated_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@index([applyType])
+  @@index([bloodGroup])
+  @@index([createdAt])
+  @@map("blood_donations")
 }
