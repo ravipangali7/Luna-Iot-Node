@@ -73,9 +73,10 @@ class LocationController {
             // Start date: 12:00:01 AM (beginning of day)
             const start = new Date(startDate);
             // const start = new Date(startDate + 'T12:00:01');
-
+            start.setHours(12, 0, 1, 0);
             // End date: 11:59:59 PM (end of day)  
             const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
             // const end = new Date(endDate + 'T23:59:59');
 
             const locationModel = new LocationModel();
