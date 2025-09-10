@@ -191,7 +191,7 @@ class RechargeController {
                 userRole: user.role.name
             });
             
-            // Process mobile top-up
+            // Process mobile top-up first
             const topupResult = await mobileTopupService.processTopup(
                 device.phone, 
                 parseFloat(amount), 
@@ -200,7 +200,13 @@ class RechargeController {
             
             logger.info('recharge', 'Top-up result', topupResult);
             
-            // Create recharge record regardless of top-up result
+            // Only create recharge record if top-up is successful
+            if (!topupResult.success) {
+                logger.warn('recharge', 'Top-up failed, not creating recharge record', topupResult);
+                return errorResponse(res, `Top-up failed: ${topupResult.message}`, 400);
+            }
+            
+            // Create recharge record only after successful top-up
             const rechargeData = {
                 deviceId: device.id,
                 amount: parseFloat(amount)
@@ -224,11 +230,14 @@ class RechargeController {
                 }
             };
             
-            if (topupResult.success) {
-                return successResponse(res, rechargeWithTopup, 'Recharge and top-up completed successfully', 201);
-            } else {
-                return successResponse(res, rechargeWithTopup, `Recharge created but top-up failed: ${topupResult.message}`, 201);
-            }
+            logger.info('recharge', 'Recharge created successfully after top-up', { 
+                rechargeId: recharge.id, 
+                deviceId: device.id, 
+                amount: amount,
+                topupReference: topupResult.reference
+            });
+            
+            return successResponse(res, rechargeWithTopup, 'Recharge and top-up completed successfully', 201);
             
         } catch (error) {
             console.error('Error in createRecharge:', error);
