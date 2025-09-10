@@ -76,9 +76,6 @@ class LocationController {
             // End date: 11:59:59 PM (end of day)  
             const end = new Date(endDate + 'T23:59:59');
 
-            console.log('start', start);
-            console.log('end', end);
-
             const locationModel = new LocationModel();
             const combinedData = await locationModel.getCombinedHistoryByDateRange(
                 imei,

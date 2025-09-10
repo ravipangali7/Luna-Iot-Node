@@ -325,6 +325,8 @@ class LocationModel {
 
     async getCombinedHistoryByDateRange(imei, startDate, endDate) {
         imei = imei.toString();
+        console.log('startDate', startDate);
+        console.log('endDate', endDate);
         try {
             // Use SQL UNION to combine location and status data efficiently
             const combinedData = await prisma.getClient().$queryRaw`
