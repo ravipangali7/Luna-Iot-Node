@@ -79,8 +79,8 @@ class LocationController {
             const locationModel = new LocationModel();
             const combinedData = await locationModel.getCombinedHistoryByDateRange(
                 imei,
-                start,
-                end
+                startDate,
+                endDate,
             );
 
             return successResponse(res, combinedData, 'Combined history data retrieved successfully');
