@@ -3,8 +3,6 @@ const router = express.Router();
 const RechargeController = require('../controllers/recharge_controller');
 const authMiddleware = require('../middleware/auth_middleware');
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
 
 // Get all recharges
 router.get('/', RechargeController.getAllRecharges);
