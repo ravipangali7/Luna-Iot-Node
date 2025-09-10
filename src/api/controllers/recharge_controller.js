@@ -1,5 +1,7 @@
 const RechargeModel = require('../../database/models/RechargeModel');
 const DeviceModel = require('../../database/models/DeviceModel');
+const mobileTopupService = require('../../services/mobileTopupService');
+const logger = require('../../services/loggingService');
 const { successResponse, errorResponse } = require('../utils/response_handler');
 const { validateRequiredFields } = require('../utils/validation');
 
@@ -169,6 +171,36 @@ class RechargeController {
                 return errorResponse(res, 'Device not found or access denied', 404);
             }
             
+            // Check if device has phone number
+            if (!device.phone) {
+                return errorResponse(res, 'Device does not have a phone number for top-up', 400);
+            }
+            
+            // Check if device has SIM type
+            if (!device.sim) {
+                return errorResponse(res, 'Device does not have SIM type information', 400);
+            }
+            
+            logger.info('recharge', 'Processing recharge', { 
+                deviceId: device.id, 
+                imei: device.imei, 
+                phone: device.phone, 
+                sim: device.sim, 
+                amount: amount,
+                userId: user.id,
+                userRole: user.role.name
+            });
+            
+            // Process mobile top-up
+            const topupResult = await mobileTopupService.processTopup(
+                device.phone, 
+                parseFloat(amount), 
+                device.sim
+            );
+            
+            logger.info('recharge', 'Top-up result', topupResult);
+            
+            // Create recharge record regardless of top-up result
             const rechargeData = {
                 deviceId: device.id,
                 amount: parseFloat(amount)
@@ -176,7 +208,28 @@ class RechargeController {
             
             const recharge = await rechargeModel.createData(rechargeData);
             
-            return successResponse(res, recharge, 'Recharge created successfully', 201);
+            // Add top-up result to recharge data
+            const rechargeWithTopup = {
+                ...recharge,
+                topupResult: {
+                    success: topupResult.success,
+                    message: topupResult.message,
+                    simType: topupResult.simType,
+                    reference: topupResult.reference,
+                    statusCode: topupResult.statusCode,
+                    state: topupResult.state,
+                    creditsConsumed: topupResult.data?.CreditsConsumed || 0,
+                    creditsAvailable: topupResult.data?.CreditsAvailable || 0,
+                    transactionId: topupResult.data?.Id || null
+                }
+            };
+            
+            if (topupResult.success) {
+                return successResponse(res, rechargeWithTopup, 'Recharge and top-up completed successfully', 201);
+            } else {
+                return successResponse(res, rechargeWithTopup, `Recharge created but top-up failed: ${topupResult.message}`, 201);
+            }
+            
         } catch (error) {
             console.error('Error in createRecharge:', error);
             return errorResponse(res, 'Failed to create recharge', 500);
