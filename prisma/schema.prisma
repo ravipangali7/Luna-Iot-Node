@@ -201,6 +201,7 @@ model Device {
   statuses    Status[]     @relation("DeviceStatuses")
   vehicles    Vehicle[]    @relation("DeviceVehicles")
   userDevices UserDevice[] @relation("UserDevices")
+  recharges   Recharge[]   @relation("DeviceRecharges")
 
   @@map("devices")
 }
@@ -430,4 +431,16 @@ model BloodDonation {
   @@index([status])
   @@index([createdAt])
   @@map("blood_donations")
+}
+
+model Recharge {
+  id        Int      @id @default(autoincrement())
+  device    Device   @relation("DeviceRecharges", fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId  Int      @map("device_id")
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([deviceId])
+  @@index([createdAt])
+  @@map("recharges")
 }
