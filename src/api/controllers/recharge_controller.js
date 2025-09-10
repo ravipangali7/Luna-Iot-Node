@@ -1,7 +1,6 @@
 const RechargeModel = require('../../database/models/RechargeModel');
 const DeviceModel = require('../../database/models/DeviceModel');
 const mobileTopupService = require('../../services/mobileTopupService');
-const logger = require('../../services/loggingService');
 const { successResponse, errorResponse } = require('../utils/response_handler');
 const { validateRequiredFields } = require('../utils/validation');
 
@@ -181,7 +180,7 @@ class RechargeController {
                 return errorResponse(res, 'Device does not have SIM type information', 400);
             }
             
-            logger.info('recharge', 'Processing recharge', { 
+            console.log('Processing recharge:', { 
                 deviceId: device.id, 
                 imei: device.imei, 
                 phone: device.phone, 
@@ -198,11 +197,11 @@ class RechargeController {
                 device.sim
             );
             
-            logger.info('recharge', 'Top-up result', topupResult);
+            console.log('Top-up result:', topupResult);
             
             // Only create recharge record if top-up is successful
             if (!topupResult.success) {
-                logger.warn('recharge', 'Top-up failed, not creating recharge record', topupResult);
+                console.warn('Top-up failed, not creating recharge record:', topupResult);
                 return errorResponse(res, `Top-up failed: ${topupResult.message}`, 400);
             }
             
@@ -230,7 +229,7 @@ class RechargeController {
                 }
             };
             
-            logger.info('recharge', 'Recharge created successfully after top-up', { 
+            console.log('Recharge created successfully after top-up:', { 
                 rechargeId: recharge.id, 
                 deviceId: device.id, 
                 amount: amount,

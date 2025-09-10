@@ -1,6 +1,5 @@
 const axios = require('axios');
 const config = require('../config/mobileTopup');
-const logger = require('./loggingService');
 
 class MobileTopupService {
   
@@ -76,7 +75,7 @@ class MobileTopupService {
         number: phone
       };
 
-      logger.info('mobileTopup', 'NTC Top-up Request', requestData);
+      console.log('NTC Top-up Request:', requestData);
 
       const response = await axios.post(config.mobileTopup.endpoints.ntc, requestData, {
         headers: {
@@ -85,7 +84,7 @@ class MobileTopupService {
         timeout: 30000 // 30 seconds timeout
       });
 
-      logger.info('mobileTopup', 'NTC Top-up Response', response.data);
+      console.log('NTC Top-up Response:', response.data);
 
       return {
         success: response.data.Status,
@@ -97,7 +96,7 @@ class MobileTopupService {
       };
 
     } catch (error) {
-      logger.error('mobileTopup', 'NTC Top-up Error', { message: error.message, phone, amount, reference });
+      console.error('NTC Top-up Error:', error.message);
       
       if (error.response) {
         return {
@@ -133,7 +132,7 @@ class MobileTopupService {
         number: phone
       };
 
-      logger.info('mobileTopup', 'Ncell Top-up Request', requestData);
+      console.log('Ncell Top-up Request:', requestData);
 
       const response = await axios.post(config.mobileTopup.endpoints.ncell, requestData, {
         headers: {
@@ -142,7 +141,7 @@ class MobileTopupService {
         timeout: 30000 // 30 seconds timeout
       });
 
-      logger.info('mobileTopup', 'Ncell Top-up Response', response.data);
+      console.log('Ncell Top-up Response:', response.data);
 
       return {
         success: response.data.Status,
@@ -154,7 +153,7 @@ class MobileTopupService {
       };
 
     } catch (error) {
-      logger.error('mobileTopup', 'Ncell Top-up Error', { message: error.message, phone, amount, reference });
+      console.error('Ncell Top-up Error:', error.message);
       
       if (error.response) {
         return {
@@ -200,7 +199,7 @@ class MobileTopupService {
       // Generate unique reference
       const reference = this.generateReferenceId();
       
-      logger.info('mobileTopup', `Processing ${simType.toUpperCase()} top-up`, { phone: cleanPhone, amount, reference, simType });
+      console.log(`Processing ${simType.toUpperCase()} top-up:`, { phone: cleanPhone, amount, reference, simType });
       
       // Make the appropriate API call
       let result;
@@ -222,7 +221,7 @@ class MobileTopupService {
       return result;
       
     } catch (error) {
-      logger.error('mobileTopup', 'Mobile Top-up Processing Error', { message: error.message, phone, amount, deviceSimType });
+      console.error('Mobile Top-up Processing Error:', error.message);
       
       return {
         success: false,
