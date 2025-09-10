@@ -71,10 +71,10 @@ class LocationController {
             }
 
             // Start date: 12:00:01 AM (beginning of day)
-            const start = new Date(startDate + 'T12:00:01');
+            // const start = new Date(startDate + 'T12:00:01');
 
             // End date: 11:59:59 PM (end of day)  
-            const end = new Date(endDate + 'T23:59:59');
+            // const end = new Date(endDate + 'T23:59:59');
 
             const locationModel = new LocationModel();
             const combinedData = await locationModel.getCombinedHistoryByDateRange(
