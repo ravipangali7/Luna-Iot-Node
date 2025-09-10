@@ -97,6 +97,8 @@ class MobileTopupService {
 
     } catch (error) {
       console.error('NTC Top-up Error:', error.message);
+      console.error('NTC Error Response:', error.response?.data);
+      console.error('NTC Error Status:', error.response?.status);
       
       if (error.response) {
         return {
@@ -154,6 +156,8 @@ class MobileTopupService {
 
     } catch (error) {
       console.error('Ncell Top-up Error:', error.message);
+      console.error('Ncell Error Response:', error.response?.data);
+      console.error('Ncell Error Status:', error.response?.status);
       
       if (error.response) {
         return {

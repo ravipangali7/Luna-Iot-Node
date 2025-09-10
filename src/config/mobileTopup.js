@@ -6,8 +6,8 @@ module.exports = {
     
     // API Endpoints
     endpoints: {
-      ntc: 'https://smartdigitalnepal.com/api/service/topup-ntc',
-      ncell: 'https://smartdigitalnepal.com/api/service/topup-ncell'
+      ntc: 'https://uatservices.mypay.com.np/api/service/topup-ntc',
+      ncell: 'https://uatservices.mypay.com.np/api/service/topup-ncell'
     },
     
     // Amount limits
