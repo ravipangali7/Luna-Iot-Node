@@ -69,15 +69,11 @@ class LocationController {
             if (!startDate || !endDate) {
                 return errorResponse(res, 'Start date and end date are required', 400);
             }
-
-            // Start date: 12:00:01 AM (beginning of day)
+            
             const start = new Date(startDate);
-            // const start = new Date(startDate + 'T12:00:01');
             start.setUTCHours(12, 0, 1, 0);
-            // End date: 11:59:59 PM (end of day)  
             const end = new Date(endDate);
             end.setUTCHours(23, 59, 59, 999);
-            // const end = new Date(endDate + 'T23:59:59');
 
             const locationModel = new LocationModel();
             const combinedData = await locationModel.getCombinedHistoryByDateRange(
@@ -106,6 +102,10 @@ class LocationController {
             // Validate date range (max 3 months)
             const start = new Date(startDate);
             const end = new Date(endDate);
+            
+            start.setUTCHours(12, 0, 1, 0);
+            end.setUTCHours(23, 59, 59, 999);
+            
             const threeMonthsAgo = new Date();
             threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
