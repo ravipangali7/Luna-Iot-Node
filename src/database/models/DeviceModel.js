@@ -41,10 +41,30 @@ class DeviceModel {
         try {
             return await prisma.getClient().device.findMany({
                 include: {
-                    userDevices: { include: { user: true } },
-                    vehicles: { include: { userVehicles: { include: { user: true } } } }
+                    userDevices: { 
+                        include: { 
+                            user: {
+                                include: {
+                                    role: true
+                                }
+                            } 
+                        } 
+                    },
+                    vehicles: { 
+                        include: { 
+                            userVehicles: { 
+                                include: { 
+                                    user: {
+                                        include: {
+                                            role: true
+                                        }
+                                    } 
+                                } 
+                            } 
+                        } 
+                    }
                 }
-            });;
+            });
         } catch (error) {
             console.error('ERROR FETCHING ALL DEVICES: ', error);
             throw error;
@@ -60,6 +80,30 @@ class DeviceModel {
                         some: {
                             userId: userId
                         }
+                    }
+                },
+                include: {
+                    userDevices: { 
+                        include: { 
+                            user: {
+                                include: {
+                                    role: true
+                                }
+                            } 
+                        } 
+                    },
+                    vehicles: { 
+                        include: { 
+                            userVehicles: { 
+                                include: { 
+                                    user: {
+                                        include: {
+                                            role: true
+                                        }
+                                    } 
+                                } 
+                            } 
+                        } 
                     }
                 }
             });
