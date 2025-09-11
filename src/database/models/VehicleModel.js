@@ -426,6 +426,208 @@ class VehicleModel {
         // }
     }
 
+    // Get all vehicles with detailed data for table display (includes device, user, recharge info)
+    async getAllVehiclesWithDetailedData(userId, userRole) {
+        try {
+            let vehicles;
+            
+            // Super Admin: all vehicles
+            if (userRole === 'Super Admin') {
+                vehicles = await prisma.getClient().vehicle.findMany({
+                    include: {
+                        device: true,
+                        userVehicles: {
+                            include: {
+                                user: {
+                                    include: {
+                                        role: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            // Dealer: vehicles through device assignment + direct assignment
+            else if (userRole === 'Dealer') {
+                const [directVehicles, deviceVehicles] = await Promise.all([
+                    // Direct vehicle assignments
+                    prisma.getClient().vehicle.findMany({
+                        where: {
+                            userVehicles: {
+                                some: { userId }
+                            }
+                        },
+                        include: {
+                            device: true,
+                            userVehicles: {
+                                include: {
+                                    user: {
+                                        include: {
+                                            role: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }),
+                    // Vehicles through device assignment
+                    prisma.getClient().vehicle.findMany({
+                        where: {
+                            device: {
+                                userDevices: {
+                                    some: { userId }
+                                }
+                            }
+                        },
+                        include: {
+                            device: true,
+                            userVehicles: {
+                                include: {
+                                    user: {
+                                        include: {
+                                            role: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
+                ]);
+    
+                // Combine and remove duplicates
+                const allVehicles = [...directVehicles, ...deviceVehicles];
+                vehicles = allVehicles.filter((vehicle, index, self) =>
+                    index === self.findIndex(v => v.imei === vehicle.imei)
+                );
+            } 
+            // Customer: only directly assigned vehicles
+            else {
+                vehicles = await prisma.getClient().vehicle.findMany({
+                    where: {
+                        userVehicles: {
+                            some: { userId }
+                        }
+                    },
+                    include: {
+                        device: true,
+                        userVehicles: {
+                            include: {
+                                user: {
+                                    include: {
+                                        role: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+    
+            // Get all IMEIs for batch queries
+            const imeis = vehicles.map(v => v.imei);
+            
+            // Get latest status for all vehicles in one query
+            const latestStatuses = await prisma.getClient().status.findMany({
+                where: {
+                    imei: { in: imeis }
+                },
+                orderBy: { createdAt: 'desc' },
+                distinct: ['imei']
+            });
+    
+            // Get latest location for all vehicles in one query
+            const latestLocations = await prisma.getClient().location.findMany({
+                where: {
+                    imei: { in: imeis }
+                },
+                orderBy: { createdAt: 'desc' },
+                distinct: ['imei']
+            });
+    
+            // Get latest recharge for each device in one query
+            const latestRecharges = await prisma.getClient().recharge.findMany({
+                where: {
+                    device: {
+                        imei: { in: imeis }
+                    }
+                },
+                include: {
+                    device: true
+                },
+                orderBy: { createdAt: 'desc' },
+                distinct: ['deviceId']
+            });
+    
+            // Get today's location data for all vehicles in one query
+            const today = new Date();
+            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+            
+            const todayLocationData = await prisma.getClient().location.findMany({
+                where: {
+                    imei: { in: imeis },
+                    createdAt: {
+                        gte: startOfDay,
+                        lte: endOfDay
+                    }
+                },
+                orderBy: { createdAt: 'asc' }
+            });
+    
+            // Create lookup maps for O(1) access
+            const statusMap = new Map(latestStatuses.map(s => [s.imei, s]));
+            const locationMap = new Map(latestLocations.map(l => [l.imei, l]));
+            const rechargeMap = new Map(latestRecharges.map(r => [r.device.imei, r]));
+            const todayDataMap = new Map();
+            
+            // Group today's data by IMEI
+            todayLocationData.forEach(loc => {
+                if (!todayDataMap.has(loc.imei)) {
+                    todayDataMap.set(loc.imei, []);
+                }
+                todayDataMap.get(loc.imei).push(loc);
+            });
+    
+            // Combine data efficiently
+            const vehiclesWithDetailedData = vehicles.map(vehicle => {
+                const latestStatus = statusMap.get(vehicle.imei);
+                const latestLocation = locationMap.get(vehicle.imei);
+                const latestRecharge = rechargeMap.get(vehicle.imei);
+                const todayLocationData = todayDataMap.get(vehicle.imei) || [];
+                
+                // Find the main customer user (role = Customer and isMain = true)
+                const mainCustomer = vehicle.userVehicles.find(uv => 
+                    uv.user.role.name === 'Customer' && uv.isMain
+                );
+    
+                // Calculate today's kilometers
+                const todayKm = calculateDistanceFromLocationData(todayLocationData);
+    
+                // Determine ownership type
+                let ownershipType = 'Customer';
+                if (mainCustomer) {
+                    ownershipType = mainCustomer.isMain ? 'Own' : 'Shared';
+                }
+    
+                return {
+                    ...vehicle,
+                    latestStatus,
+                    latestLocation,
+                    latestRecharge,
+                    todayKm: Math.round(todayKm * 100) / 100,
+                    ownershipType,
+                    mainCustomer: mainCustomer || null
+                };
+            });
+    
+            return vehiclesWithDetailedData;
+        } catch (error) {
+            console.error('ERROR FETCHING VEHICLES WITH DETAILED DATA: ', error);
+            throw error;
+        }
+    }
+
     // Get vehicle by IMEI with complete data and role-based access
     async getVehicleByImeiWithCompleteData(imei, userId, userRole) {
         imei = imei.toString();

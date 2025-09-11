@@ -7,6 +7,7 @@ router.use(corsMiddleware);
 
 // Main vehicle endpoints
 router.get('/vehicle', VehicleController.getAllVehicles);
+router.get('/vehicle/detailed', VehicleController.getAllVehiclesDetailed);
 router.get('/vehicle/:imei', VehicleController.getVehicleByImei);
 router.post('/vehicle/create', VehicleController.createVehicle);
 router.put('/vehicle/update/:imei', VehicleController.updateVehicle);

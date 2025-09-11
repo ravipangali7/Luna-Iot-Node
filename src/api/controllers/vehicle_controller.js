@@ -21,6 +21,21 @@ class VehicleController {
         }
     }
 
+    // Get all vehicles with detailed data for table display (includes device, user, recharge info)
+    static async getAllVehiclesDetailed(req, res) {
+        try {
+            const user = req.user;
+            const vehicleModel = new VehicleModel();
+
+            const vehicles = await vehicleModel.getAllVehiclesWithDetailedData(user.id, user.role.name);
+
+            return successResponse(res, vehicles, 'Detailed vehicles retrieved successfully');
+        } catch (error) {
+            console.error('Error in getAllVehiclesDetailed:', error);
+            return errorResponse(res, 'Failed to retrieve detailed vehicles', 500);
+        }
+    }
+
     // Get vehicle by IMEI with complete data and role-based access
     static async getVehicleByImei(req, res) {
         try {
