@@ -217,6 +217,7 @@ model Vehicle {
   mileage     Decimal     @db.Decimal(10, 2)
   minimumFuel Decimal     @map("minimum_fuel") @db.Decimal(10, 2)
   speedLimit  Int         @default(60) @map("speed_limit")
+  expireDate  DateTime?   @map("expire_date")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")

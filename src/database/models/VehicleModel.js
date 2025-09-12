@@ -23,6 +23,7 @@ class VehicleModel {
                 mileage: parseFloat(data.mileage) || 0,
                 minimumFuel: parseFloat(data.minimumFuel) || 0,
                 speedLimit: parseInt(data.speedLimit) || 60,
+                expireDate: data.expireDate ? new Date(data.expireDate) : new Date(nepalTime.getTime() + (365 * 24 * 60 * 60 * 1000)), // Default to one year from created_at
                 createdAt: nepalTime,
                 updatedAt: nepalTime
             };
@@ -734,12 +735,16 @@ class VehicleModel {
     async updateData(imei, data) {
         imei = imei.toString();
         try {
-            const allowedFields = ['imei', 'name', 'vehicleNo', 'vehicleType', 'odometer', 'mileage', 'minimumFuel', 'speedLimit'];
+            const allowedFields = ['imei', 'name', 'vehicleNo', 'vehicleType', 'odometer', 'mileage', 'minimumFuel', 'speedLimit', 'expireDate'];
             const updateData = {};
 
             for (const [key, value] of Object.entries(data)) {
                 if (allowedFields.includes(key)) {
-                    updateData[key] = value;
+                    if (key === 'expireDate' && value) {
+                        updateData[key] = new Date(value);
+                    } else {
+                        updateData[key] = value;
+                    }
                 }
             }
 
