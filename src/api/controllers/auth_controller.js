@@ -38,18 +38,16 @@ class AuthController {
                 return errorResponse(res, 'User not found', 404);
             }
 
-            // Get combined permissions (role + direct user permissions)
-            const rolePermissions = user.role.permissions.map(rp => rp.permission.name);
+            // Get only direct user permissions (ignore role permissions as requested)
             const directPermissions = user.userPermissions.map(up => up.permission.name);
-            const allPermissions = [...new Set([...rolePermissions, ...directPermissions])];
-
+            
             return successResponse(res, 'User data retrieved successfully', {
                 id: user.id,
                 name: user.name,
                 phone: user.phone,
                 status: user.status,
                 role: user.role.name,
-                permissions: allPermissions,
+                permissions: directPermissions, // Only direct user permissions
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             });
