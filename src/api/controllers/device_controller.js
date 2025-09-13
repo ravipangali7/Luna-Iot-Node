@@ -1,6 +1,7 @@
 const DeviceModel = require('../../database/models/DeviceModel');
 const { successResponse, errorResponse } = require('../utils/response_handler');
 const UserModel = require('../../database/models/UserModel');
+const smsService = require('../../utils/sms_service');
 
 class DeviceController {
     // Get all devices
@@ -217,6 +218,43 @@ class DeviceController {
         } catch (error) {
             console.error('Error in removeDeviceAssignment:', error);
             return errorResponse(res, 'Failed to remove device assignment', 500);
+        }
+    }
+
+    // Send server point command via SMS
+    static async sendServerPoint(req, res) {
+        try {
+            const user = req.user;
+            
+            // Only Super Admin can send server point commands
+            if (user.role.name !== 'Super Admin') {
+                return errorResponse(res, 'Access denied. Only Super Admin can send server point commands', 403);
+            }
+            
+            const { phone } = req.body;
+            
+            if (!phone) {
+                return errorResponse(res, 'Phone number is required', 400);
+            }
+
+            // Server point command message
+            const serverPointMessage = 'SERVER,0,38.54.71.218,7777,0#';
+            
+            // Send SMS
+            const smsResult = await smsService.sendSMS(phone, serverPointMessage);
+            
+            if (smsResult.success) {
+                return successResponse(res, {
+                    phone: phone,
+                    message: serverPointMessage,
+                    sent: true
+                }, 'Server point command sent successfully');
+            } else {
+                return errorResponse(res, 'Failed to send server point command', 500);
+            }
+        } catch (error) {
+            console.error('Error in sendServerPoint:', error);
+            return errorResponse(res, 'Failed to send server point command', 500);
         }
     }
 }

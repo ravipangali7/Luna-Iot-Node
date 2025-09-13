@@ -15,4 +15,7 @@ router.delete('/device/delete/:imei', DeviceController.deleteDevice);
 router.post('/device/assign', DeviceController.assignDeviceToUser);
 router.delete('/device/assign', DeviceController.removeDeviceAssignment);
 
+// Server point route
+router.post('/device/server-point', DeviceController.sendServerPoint);
+
 module.exports = router;
