@@ -25,7 +25,12 @@ class AuthController {
             const user = await prisma.getClient().user.findUnique({
                 where: { id: userId },
                 include: {
-                    role: true
+                    role: true,
+                    userPermissions: {
+                        include: {
+                            permission: true
+                        }
+                    }
                 }
             });
 
@@ -33,12 +38,18 @@ class AuthController {
                 return errorResponse(res, 'User not found', 404);
             }
 
+            // Get combined permissions (role + direct user permissions)
+            const rolePermissions = user.role.permissions.map(rp => rp.permission.name);
+            const directPermissions = user.userPermissions.map(up => up.permission.name);
+            const allPermissions = [...new Set([...rolePermissions, ...directPermissions])];
+
             return successResponse(res, 'User data retrieved successfully', {
                 id: user.id,
                 name: user.name,
                 phone: user.phone,
                 status: user.status,
                 role: user.role.name,
+                permissions: allPermissions,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             });

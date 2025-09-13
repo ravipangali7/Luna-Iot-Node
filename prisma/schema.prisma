@@ -128,6 +128,9 @@ model User {
   role   Role @relation("UserRole", fields: [roleId], references: [id])
   roleId Int  @map("role_id")
 
+  // Direct user permissions (many-to-many)
+  userPermissions UserPermission[] @relation("UserPermissions")
+
   userDevices       UserDevice[]       @relation("UserDevices")
   userVehicles      UserVehicle[]      @relation("UserVehicles")
   // Notification relations
@@ -166,6 +169,7 @@ model Permission {
 
   // Relations
   roles RolePermission[] @relation("RolePermissions")
+  users UserPermission[] @relation("UserPermissions")
 
   @@map("permissions")
 }
@@ -182,6 +186,20 @@ model RolePermission {
 
   @@unique([roleId, permissionId])
   @@map("role_permissions")
+}
+
+// User-Permission junction table
+model UserPermission {
+  id           Int        @id @default(autoincrement())
+  user         User       @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int        @map("user_id")
+  permission   Permission @relation("UserPermissions", fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId Int        @map("permission_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
 }
 
 model Device {
