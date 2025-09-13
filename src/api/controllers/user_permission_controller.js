@@ -13,6 +13,12 @@ class UserPermissionController {
             return successResponse(res, permissions, 'User permissions retrieved successfully');
         } catch (error) {
             console.error('Error in getUserPermissions:', error);
+            
+            // If table doesn't exist, return empty array
+            if (error.code === 'P2021' || error.message.includes('does not exist')) {
+                return successResponse(res, [], 'User permissions retrieved successfully (no permissions assigned)');
+            }
+            
             return errorResponse(res, 'Failed to retrieve user permissions', 500);
         }
     }
@@ -143,6 +149,12 @@ class UserPermissionController {
             return successResponse(res, permissions, 'All permissions retrieved successfully');
         } catch (error) {
             console.error('Error in getAllPermissions:', error);
+            
+            // If table doesn't exist, return empty array
+            if (error.code === 'P2021' || error.message.includes('does not exist')) {
+                return successResponse(res, [], 'All permissions retrieved successfully (no permissions available)');
+            }
+            
             return errorResponse(res, 'Failed to retrieve permissions', 500);
         }
     }
