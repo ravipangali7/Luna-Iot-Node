@@ -160,9 +160,9 @@ model Role {
 
 // Permission model
 model Permission {
-  id          Int            @id @default(autoincrement())
-  name        PermissionType @unique
-  description String?        @db.Text
+  id          Int    @id @default(autoincrement())
+  name        String @unique @db.VarChar(100)
+  description String? @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
