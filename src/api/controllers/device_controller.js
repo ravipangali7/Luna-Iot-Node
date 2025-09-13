@@ -257,6 +257,43 @@ class DeviceController {
             return errorResponse(res, 'Failed to send server point command', 500);
         }
     }
+
+    // Send reset command via SMS
+    static async sendReset(req, res) {
+        try {
+            const user = req.user;
+            
+            // Only Super Admin can send reset commands
+            if (user.role.name !== 'Super Admin') {
+                return errorResponse(res, 'Access denied. Only Super Admin can send reset commands', 403);
+            }
+            
+            const { phone } = req.body;
+            
+            if (!phone) {
+                return errorResponse(res, 'Phone number is required', 400);
+            }
+
+            // Reset command message
+            const resetMessage = 'RESET#';
+            
+            // Send SMS
+            const smsResult = await smsService.sendSMS(phone, resetMessage);
+            
+            if (smsResult.success) {
+                return successResponse(res, {
+                    phone: phone,
+                    message: resetMessage,
+                    sent: true
+                }, 'Reset command sent successfully');
+            } else {
+                return errorResponse(res, 'Failed to send reset command', 500);
+            }
+        } catch (error) {
+            console.error('Error in sendReset:', error);
+            return errorResponse(res, 'Failed to send reset command', 500);
+        }
+    }
 }
 
 module.exports = DeviceController;

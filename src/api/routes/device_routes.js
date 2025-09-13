@@ -18,4 +18,7 @@ router.delete('/device/assign', DeviceController.removeDeviceAssignment);
 // Server point route
 router.post('/device/server-point', DeviceController.sendServerPoint);
 
+// Reset route
+router.post('/device/reset', DeviceController.sendReset);
+
 module.exports = router;
