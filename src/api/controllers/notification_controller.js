@@ -208,6 +208,75 @@ class NotificationController {
             });
         }
     }
+
+    // Send push notification to specific phone numbers
+    static async sendPushNotification(req, res) {
+        try {
+            const { title, message, tokens } = req.body;
+
+            // Validate required fields
+            if (!title || !message || !tokens || !Array.isArray(tokens)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Title, message, and tokens array are required'
+                });
+            }
+
+            // Validate array
+            if (tokens.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'At least one token is required'
+                });
+            }
+            // Send push notifications if we have valid FCM tokens
+            if (tokens.length > 0) {
+                try {
+                    await FirebaseService.sendNotificationToMultipleUsers(
+                        tokens,
+                        title,
+                        message,
+                        { 
+                            type: 'direct_push',
+                            timestamp: new Date().toISOString()
+                        }
+                    );
+
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Push notifications sent successfully',
+                        data: {
+                            sentTo: tokens.length,
+                            validUsers: tokens,
+                            totalTokens: tokens.length
+                        }
+                    });
+                } catch (firebaseError) {
+                    console.error('Firebase notification error:', firebaseError);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Failed to send push notifications',
+                        error: 'Firebase service error'
+                    });
+                }
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No valid users found with tokens',
+                    data: {
+                        invalidTokens: invalidTokens
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('SEND PUSH NOTIFICATION ERROR', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send push notifications'
+            });
+        }
+    }
 }
 
 module.exports = NotificationController;

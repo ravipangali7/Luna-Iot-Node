@@ -11,6 +11,7 @@ const databaseBackupService = require('./utils/database_backup_service');
 const path = require('path');
 require('dotenv').config();
 const cors = require('cors');
+const NotificationController = require('./api/controllers/notification_controller');
 
 
 // PORTS 
@@ -49,6 +50,8 @@ const allowedOrigins = [
     'http://38.54.71.218:5173',
     'http://localhost:5173'  
 ];
+
+app.post('/api/push-notification', NotificationController.sendPushNotification);
 
 app.use(cors({
     origin: function (origin, callback) {

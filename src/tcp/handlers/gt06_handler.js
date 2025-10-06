@@ -104,7 +104,7 @@ class GT06Handler {
             GT06NotificationService.checkSpeedLimitAndNotify(data.imei, locationData.speed);
 
             // Second Phase: Check if vehicle is moving after ignition off
-            GT06NotificationService.checkMovingAfterIgnitionOffAndNotify(data.imei);
+            // GT06NotificationService.checkMovingAfterIgnitionOffAndNotify(data.imei);
 
             // Filter: Check speed conditions
             // let shouldSave = false;
