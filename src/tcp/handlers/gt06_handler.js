@@ -12,7 +12,7 @@ class GT06Handler {
         try {
             gt06.parse(data);
         } catch (e) {
-            console.log('Error while parsing gt06 data: ', e);
+            // console.log('Error while parsing gt06 data: ', e);
             return;
         }
 
