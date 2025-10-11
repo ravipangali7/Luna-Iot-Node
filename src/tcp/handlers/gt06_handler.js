@@ -83,6 +83,12 @@ class GT06Handler {
             // Show status data for specific IMEI
             if (data.imei.toString() === '352312094630210') {
                 console.log(`📊 Status Data - IMEI: ${data.imei}, Battery: ${statusData.battery}, Signal: ${statusData.signal}, Ignition: ${statusData.ignition}, Charging: ${statusData.charging}, Relay: ${statusData.relay}, Time: ${statusData.createdAt}`);
+                
+                if (latestStatus) {
+                    console.log(`🔍 COMPARISON - Old Ignition: ${latestStatus.ignition} (${typeof latestStatus.ignition}), New Ignition: ${statusData.ignition} (${typeof statusData.ignition})`);
+                    console.log(`🔍 IGNITION CHANGED: ${ignitionChanged}`);
+                    console.log(`🔍 SHOULD SAVE: ${shouldSave}`);
+                }
             }
 
             // Check ignition change and send notification BEFORE saving to database
