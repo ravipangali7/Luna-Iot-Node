@@ -1,6 +1,7 @@
 const tcp = require('./tcp/tcp_listener');
 const mysqlService = require('./database/mysql');
 const socketService = require('./socket/socket_service');
+const GT06NotificationService = require('./utils/gt06_notification_service');
 require('dotenv').config();
 
 
@@ -31,6 +32,12 @@ async function startServer() {
         // Start TCP listener
         tcp.startServer(TCP_PORT);
         console.log(`TCP listener started on port ${TCP_PORT}`);
+
+        // Start periodic cleanup of expired notification cooldowns (every 10 minutes)
+        setInterval(() => {
+            GT06NotificationService.clearExpiredCooldowns();
+            console.log('Cleared expired notification cooldowns');
+        }, 10 * 60 * 1000);
 
         // Graceful shutdown
         process.on('SIGINT', async () => {

@@ -2,6 +2,65 @@ const mysqlService = require('../database/mysql');
 const firebaseService = require('./firebase_service');
 
 class GT06NotificationService {
+    // In-memory notification cooldown tracking
+    static notificationCooldowns = new Map();
+    
+    // Cooldown periods in milliseconds
+    static COOLDOWN_PERIODS = {
+        speed_alert: 5 * 60 * 1000, // 5 minutes
+        ignition_change: 1 * 60 * 1000, // 1 minute
+        moving_after_ignition_off: 10 * 60 * 1000 // 10 minutes
+    };
+    
+    // Check if notification is in cooldown period
+    static isInCooldown(imei, notificationType) {
+        const key = `${imei}_${notificationType}`;
+        const lastSent = this.notificationCooldowns.get(key);
+        
+        if (!lastSent) return false;
+        
+        const cooldownPeriod = this.COOLDOWN_PERIODS[notificationType] || 0;
+        const timeSinceLastSent = Date.now() - lastSent;
+        
+        return timeSinceLastSent < cooldownPeriod;
+    }
+    
+    // Set notification cooldown
+    static setCooldown(imei, notificationType) {
+        const key = `${imei}_${notificationType}`;
+        this.notificationCooldowns.set(key, Date.now());
+    }
+    
+    // Clear expired cooldowns to prevent memory leaks
+    static clearExpiredCooldowns() {
+        const now = Date.now();
+        for (const [key, timestamp] of this.notificationCooldowns.entries()) {
+            const notificationType = key.split('_').slice(1).join('_');
+            const cooldownPeriod = this.COOLDOWN_PERIODS[notificationType] || 0;
+            
+            if (now - timestamp > cooldownPeriod) {
+                this.notificationCooldowns.delete(key);
+            }
+        }
+    }
+    
+    // Get cooldown status for debugging
+    static getCooldownStatus(imei, notificationType) {
+        const key = `${imei}_${notificationType}`;
+        const lastSent = this.notificationCooldowns.get(key);
+        
+        if (!lastSent) return { inCooldown: false, timeRemaining: 0 };
+        
+        const cooldownPeriod = this.COOLDOWN_PERIODS[notificationType] || 0;
+        const timeSinceLastSent = Date.now() - lastSent;
+        const timeRemaining = Math.max(0, cooldownPeriod - timeSinceLastSent);
+        
+        return {
+            inCooldown: timeSinceLastSent < cooldownPeriod,
+            timeRemaining: timeRemaining,
+            lastSent: new Date(lastSent)
+        };
+    }
     
     // Send notification to all users who have access to a vehicle and notifications enabled
     static async sendVehicleNotification(imei, title, message, data = {}) {
@@ -44,6 +103,12 @@ class GT06NotificationService {
     // Check if ignition status changed and send notification
     static async checkIgnitionChangeAndNotify(imei, newIgnitionStatus) {
         try {
+            // Check if notification is in cooldown
+            if (this.isInCooldown(imei, 'ignition_change')) {
+                console.log(`Ignition change notification for ${imei} is in cooldown`);
+                return;
+            }
+
             // Get latest status to compare ignition
             const latestStatus = await mysqlService.getLatestStatus(imei);
 
@@ -60,6 +125,9 @@ class GT06NotificationService {
                         type: 'ignition_change',
                         ignitionStatus: newIgnitionStatus
                     });
+                    
+                    // Set cooldown after sending notification
+                    this.setCooldown(imei, 'ignition_change');
                 }
             }
         } catch (error) {
@@ -70,6 +138,12 @@ class GT06NotificationService {
     // Check speed limit and send overspeeding notification
     static async checkSpeedLimitAndNotify(imei, currentSpeed) {
         try {
+            // Check if notification is in cooldown
+            if (this.isInCooldown(imei, 'speed_alert')) {
+                console.log(`Speed alert notification for ${imei} is in cooldown`);
+                return;
+            }
+
             // Get vehicle speed limit
             const vehicle = await mysqlService.getVehicleByImei(imei);
 
@@ -85,6 +159,9 @@ class GT06NotificationService {
                     currentSpeed: currentSpeed,
                     speedLimit: vehicle.speed_limit
                 });
+                
+                // Set cooldown after sending notification
+                this.setCooldown(imei, 'speed_alert');
             }
         } catch (error) {
             console.error('Error checking speed limit:', error);
@@ -94,6 +171,12 @@ class GT06NotificationService {
     // Check if vehicle is moving after ignition off and send notification
     static async checkMovingAfterIgnitionOffAndNotify(imei) {
         try {
+            // Check if notification is in cooldown
+            if (this.isInCooldown(imei, 'moving_after_ignition_off')) {
+                console.log(`Moving after ignition off notification for ${imei} is in cooldown`);
+                return;
+            }
+
             // Get latest status and location data
             const latestStatus = await mysqlService.getLatestStatus(imei);
             const latestLocation = await mysqlService.getLatestLocation(imei);
@@ -113,6 +196,9 @@ class GT06NotificationService {
                         ignitionOffTime: latestStatus.created_at,
                         lastLocationTime: latestLocation.created_at
                     });
+                    
+                    // Set cooldown after sending notification
+                    this.setCooldown(imei, 'moving_after_ignition_off');
                 }
             }
         } catch (error) {

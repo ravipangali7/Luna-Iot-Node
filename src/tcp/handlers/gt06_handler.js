@@ -59,14 +59,12 @@ class GT06Handler {
                 createdAt: nepalTime
             };
 
-            // Check ignition change and send notification BEFORE saving
-            await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition);
-
-
             // Filter: Check if status data has changed from latest
             const latestStatus = await mysqlService.getLatestStatus(data.imei);
 
             let shouldSave = true;
+            let ignitionChanged = false;
+            
             if (latestStatus) {
                 // Check if all status fields are the same
                 shouldSave = !(
@@ -76,6 +74,12 @@ class GT06Handler {
                     latestStatus.charging === statusData.charging &&
                     latestStatus.relay === statusData.relay
                 );
+                
+                // Check specifically if ignition changed
+                ignitionChanged = latestStatus.ignition !== statusData.ignition;
+            } else {
+                // If no previous status, consider ignition as changed
+                ignitionChanged = true;
             }
 
             if (shouldSave) {
@@ -83,6 +87,11 @@ class GT06Handler {
                 await mysqlService.insertStatus(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
+                
+                // Check ignition change and send notification AFTER saving and only if ignition actually changed
+                if (ignitionChanged) {
+                    await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition);
+                }
             }
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
