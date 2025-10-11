@@ -1,4 +1,4 @@
-const prisma = require('../database/prisma');
+const mysqlService = require('../database/mysql');
 const firebaseService = require('./firebase_service');
 
 class GT06NotificationService {
@@ -6,46 +6,24 @@ class GT06NotificationService {
     // Send notification to all users who have access to a vehicle and notifications enabled
     static async sendVehicleNotification(imei, title, message, data = {}) {
         try {
-            // Get vehicle details
-            const vehicle = await prisma.getClient().vehicle.findUnique({
-                where: { imei: imei.toString() },
-                select: { id: true, vehicleNo: true }
-            });
+            // Get all users who have access to this vehicle and notifications enabled
+            const users = await mysqlService.getUsersWithVehicleAccess(imei);
 
-            if (!vehicle) {
-                console.log(`Vehicle not found for IMEI: ${imei}`);
+            if (users.length === 0) {
+                console.log(`No users with notifications enabled found for IMEI: ${imei}`);
                 return;
             }
 
-            // Get all users who have access to this vehicle and notifications enabled
-            const userVehicles = await prisma.getClient().userVehicle.findMany({
-                where: {
-                    vehicleId: vehicle.id,
-                    notification: true // Assuming 'events' permission includes notifications
-                },
-                include: {
-                    user: {
-                        select: {
-                            id: true,
-                            fcmToken: true,
-                            name: true
-                        }
-                    }
-                }
-            });
-
             // Filter users with FCM tokens
-            const usersWithFcmTokens = userVehicles
-                .map(uv => uv.user)
-                .filter(user => user.fcmToken && user.fcmToken.trim() !== '');
+            const usersWithFcmTokens = users.filter(user => user.fcm_token && user.fcm_token.trim() !== '');
 
             if (usersWithFcmTokens.length === 0) {
-                console.log(`No users with FCM tokens found for vehicle: ${vehicle.vehicleNo}`);
+                console.log(`No users with FCM tokens found for IMEI: ${imei}`);
                 return;
             }
 
             // Extract FCM tokens
-            const fcmTokens = usersWithFcmTokens.map(user => user.fcmToken);
+            const fcmTokens = usersWithFcmTokens.map(user => user.fcm_token);
 
             // Send notification to all users
             const result = await firebaseService.sendNotificationToMultipleUsers(
@@ -67,23 +45,16 @@ class GT06NotificationService {
     static async checkIgnitionChangeAndNotify(imei, newIgnitionStatus) {
         try {
             // Get latest status to compare ignition
-            const latestStatus = await prisma.getClient().status.findFirst({
-                where: { imei: imei.toString() },
-                orderBy: { createdAt: 'desc' },
-                select: { ignition: true }
-            });
+            const latestStatus = await mysqlService.getLatestStatus(imei);
 
             // If no previous status or ignition changed, send notification
             if (!latestStatus || latestStatus.ignition !== newIgnitionStatus) {
-                const vehicle = await prisma.getClient().vehicle.findUnique({
-                    where: { imei: imei.toString() },
-                    select: { vehicleNo: true }
-                });
+                const vehicle = await mysqlService.getVehicleByImei(imei);
 
                 if (vehicle) {
                     const ignitionStatus = newIgnitionStatus ? 'On' : 'Off';
                     const title = 'Vehicle Status Update';
-                    const message = `${vehicle.vehicleNo}: Ignition is ${ignitionStatus}`;
+                    const message = `${vehicle.vehicle_no}: Ignition is ${ignitionStatus}`;
 
                     await this.sendVehicleNotification(imei, title, message, {
                         type: 'ignition_change',
@@ -100,22 +71,19 @@ class GT06NotificationService {
     static async checkSpeedLimitAndNotify(imei, currentSpeed) {
         try {
             // Get vehicle speed limit
-            const vehicle = await prisma.getClient().vehicle.findUnique({
-                where: { imei: imei.toString() },
-                select: { vehicleNo: true, speedLimit: true }
-            });
+            const vehicle = await mysqlService.getVehicleByImei(imei);
 
             if (!vehicle) return;
 
             // Check if speed exceeds limit
-            if (currentSpeed > vehicle.speedLimit) {
+            if (currentSpeed > vehicle.speed_limit) {
                 const title = 'Speed Alert';
-                const message = `${vehicle.vehicleNo}: Vehicle is Overspeeding at ${currentSpeed} km/h`;
+                const message = `${vehicle.vehicle_no}: Vehicle is Overspeeding at ${currentSpeed} km/h`;
 
                 await this.sendVehicleNotification(imei, title, message, {
                     type: 'overspeeding',
                     currentSpeed: currentSpeed,
-                    speedLimit: vehicle.speedLimit
+                    speedLimit: vehicle.speed_limit
                 });
             }
         } catch (error) {
@@ -126,42 +94,24 @@ class GT06NotificationService {
     // Check if vehicle is moving after ignition off and send notification
     static async checkMovingAfterIgnitionOffAndNotify(imei) {
         try {
-            // Get latest status where ignition is off
-            const latestIgnitionOffStatus = await prisma.getClient().status.findFirst({
-                where: {
-                    imei: imei.toString(),
-                    ignition: false
-                },
-                orderBy: { createdAt: 'desc' },
-                select: { createdAt: true }
-            });
+            // Get latest status and location data
+            const latestStatus = await mysqlService.getLatestStatus(imei);
+            const latestLocation = await mysqlService.getLatestLocation(imei);
 
-            if (!latestIgnitionOffStatus) return;
+            if (!latestStatus || !latestLocation) return;
 
-            // Get latest location data
-            const latestLocation = await prisma.getClient().location.findFirst({
-                where: { imei: imei.toString() },
-                orderBy: { createdAt: 'desc' },
-                select: { createdAt: true }
-            });
-
-            if (!latestLocation) return;
-
-            // Compare timestamps: if ignition_off is newer than location, send notification
-            if (latestIgnitionOffStatus.createdAt > latestLocation.createdAt) {
-                const vehicle = await prisma.getClient().vehicle.findUnique({
-                    where: { imei: imei.toString() },
-                    select: { vehicleNo: true }
-                });
+            // Check if ignition is off and location is newer than status
+            if (!latestStatus.ignition && latestLocation.created_at > latestStatus.created_at) {
+                const vehicle = await mysqlService.getVehicleByImei(imei);
 
                 if (vehicle) {
                     const title = 'Vehicle Movement Alert';
-                    const message = `${vehicle.vehicleNo}: Vehicle is moving`;
+                    const message = `${vehicle.vehicle_no}: Vehicle is moving`;
 
                     await this.sendVehicleNotification(imei, title, message, {
                         type: 'moving_after_ignition_off',
-                        ignitionOffTime: latestIgnitionOffStatus.createdAt,
-                        lastLocationTime: latestLocation.createdAt
+                        ignitionOffTime: latestStatus.created_at,
+                        lastLocationTime: latestLocation.created_at
                     });
                 }
             }

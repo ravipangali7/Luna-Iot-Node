@@ -9,7 +9,7 @@ class TCPListener {
         this.connections = new Map();
     }
 
-    startServer(port = 7777) {
+    startServer(port = 6666) {
         this.server = net.createServer((socket) => {
             const connectionId = `${socket.remoteAddress}:${socket.remotePort}`;
             socketService.deviceMonitoringMessage('connected', null, null, null);
@@ -98,7 +98,7 @@ class TCPListener {
 const tcpListener = new TCPListener();
 
 // Export fucntions
-function startServer(port = 7777) {
+function startServer(port = 6666) {
     tcpListener.startServer(port);
 }
 

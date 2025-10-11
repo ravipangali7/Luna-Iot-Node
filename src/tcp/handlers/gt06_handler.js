@@ -1,11 +1,8 @@
 const Gt06 = require('gt06x22')
-const DeviceModel = require('../../database/models/DeviceModel');
-const StatusModel = require('../../database/models/StatusModel');
-const LocationModel = require('../../database/models/LocationModel');
+const mysqlService = require('../../database/mysql');
 const socketService = require('../../socket/socket_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
 const datetimeService = require('../../utils/datetime_service');
-const axios = require('axios');
 
 class GT06Handler {
 
@@ -40,8 +37,7 @@ class GT06Handler {
     async handleData(data, socket) {
         // console.log("DATA: ",data);
 
-        var device = new DeviceModel();
-        device = await device.getDataByImei(data.imei);
+        const device = await mysqlService.getDeviceByImei(data.imei);
 
         if (device === null) {
             socketService.deviceMonitoringMessage('imei_not_registered', data.imei, null, null);
@@ -53,13 +49,13 @@ class GT06Handler {
             const signal = this.getSignal(data.gsmSigStrength);
             const nepalTime = datetimeService.getNepalDateTime(new Date());
             const statusData = {
+                deviceId: device.id,
                 imei: data.imei.toString(),
                 battery: battery,
                 signal: signal,
                 ignition: data.terminalInfo.ignition,
                 charging: data.terminalInfo.charging,
-                relay: data.terminalInfo.relayState,
-                createdAt: nepalTime
+                relay: data.terminalInfo.relayState
             };
 
             // Check ignition change and send notification BEFORE saving
@@ -67,8 +63,7 @@ class GT06Handler {
 
 
             // Filter: Check if status data has changed from latest
-            const statusModel = new StatusModel();
-            const latestStatus = await statusModel.getLatest(data.imei);
+            const latestStatus = await mysqlService.getLatestStatus(data.imei);
 
             let shouldSave = true;
             if (latestStatus) {
@@ -84,13 +79,14 @@ class GT06Handler {
 
             if (shouldSave) {
                 // Save to database and send socket message
-                await this.sendStatusToDjango(statusData);
+                await mysqlService.insertStatus(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
             }
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
             const locationData = {
+                deviceId: device.id,
                 imei: data.imei.toString(),
                 latitude: data.lat,
                 longitude: data.lon,
@@ -115,7 +111,7 @@ class GT06Handler {
 
             // if (shouldSave) {
             // Save to database and send socket message
-            await this.sendLocationToDjango(locationData);
+            await mysqlService.insertLocation(locationData);
             socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
             socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
             // }
@@ -126,65 +122,6 @@ class GT06Handler {
         else {
             console.log('SORRY WE DIDNT HANDLE THAT');
             console.log(data);
-        }
-    }
-    
-    // Send status data to Django API (replaces StatusModel.createData)
-    async sendStatusToDjango(data) {
-        try {
-            const statusData = {
-                imei: data.imei,
-                battery: data.battery,
-                signal: data.signal,
-                ignition: data.ignition,
-                charging: data.charging,
-                relay: data.relay,
-                created_at: data.createdAt
-            };
-
-            console.log('Sending status to Django API:', statusData);
-
-            const response = await axios.post(`${process.env.DJANGO_API_URL || 'http://localhost:8000/api'}/device/status/`, statusData, {
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            return response.data;
-        } catch (error) {
-            console.error('Error sending status to Django API:', error.response?.data || error.message);
-            // Don't throw error - continue processing even if API call fails
-        }
-    }
-
-    // Send location data to Django API (replaces LocationModel.createData)
-    async sendLocationToDjango(data) {
-        try {
-            const locationData = {
-                imei: data.imei,
-                latitude: data.latitude,
-                longitude: data.longitude,
-                speed: data.speed,
-                course: data.course,
-                real_time_gps: data.realTimeGps,
-                satellite: data.satellite || 0,
-                created_at: data.createdAt
-            };
-
-            console.log('Sending location to Django API:', locationData);
-
-            const response = await axios.post(`${process.env.DJANGO_API_URL || 'http://localhost:8000/api'}/device/location/`, locationData, {
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            return response.data;
-        } catch (error) {
-            console.error('Error sending location to Django API:', error.response?.data || error.message);
-            // Don't throw error - continue processing even if API call fails
         }
     }
 

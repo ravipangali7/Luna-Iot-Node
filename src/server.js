@@ -1,180 +1,48 @@
-const cluster = require('cluster');
-const os = require('os');
 const tcp = require('./tcp/tcp_listener');
-const prisma = require('./database/prisma');
-const express = require('express');
-const { errorMiddleware } = require('./api/middleware/error_middleware');
+const mysqlService = require('./database/mysql');
 const socketService = require('./socket/socket_service');
-const AuthMiddleware = require('./api/middleware/auth_middleware');
-const otpCleanupService = require('./utils/otp_cleanup_service');
-const databaseBackupService = require('./utils/database_backup_service');
-const path = require('path');
 require('dotenv').config();
-const cors = require('cors');
-const NotificationController = require('./api/controllers/notification_controller');
 
 
 // PORTS 
-const API_PORT = process.env.API_PORT || 7070;
-const TCP_PORT = process.env.TCP_PORT || 7777;
-
-// IMPORT Routes
-const authRoutes = require('./api/routes/auth_routes');
-const notificationRoutes = require('./api/routes/notification_routes');
-const roleRoutes = require('./api/routes/role_routes');
-const userRoutes = require('./api/routes/user_routes');
-const userPermissionRoutes = require('./api/routes/user_permission_routes');
-const deviceRoutes = require('./api/routes/device_routes');
-const locationRoutes = require('./api/routes/location_routes');
-const statusRoutes = require('./api/routes/status_routes');
-const vehicleRoutes = require('./api/routes/vehicle_routes');
-const geofenceRoutes = require('./api/routes/geofence_routes');
-const popupRoutes = require('./api/routes/popup_routes');
-const relayRoutes = require('./api/routes/relay_routes');
-const bloodDonationRoutes = require('./api/routes/blood_donation_routes');
-const rechargeRoutes = require('./api/routes/recharge_routes');
-
-// Express App
-const app = express();
-app.use(express.json());
-
-// CORS
-const allowedOrigins = [
-    'https://app.mylunago.com',
-    'http://app.mylunago.com',
-    'https://web.mylunago.com',
-    'http://web.mylunago.com',
-    'https://system.mylunago.com',
-    'http://system.mylunago.com',
-    'http://38.54.71.218:7070',
-    'http://38.54.71.218:5173',
-    'http://localhost:5173'  
-];
-
-app.post('/api/push-notification', NotificationController.sendPushNotification);
-
-app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
-        }
-        return callback(null, true);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'x-phone', 'x-token'],
-    credentials: true
-}));
+const SOCKET_PORT = process.env.SOCKET_PORT || 6060;
+const TCP_PORT = process.env.TCP_PORT || 6666;
 
 
 
-// API Routes
-app.use('/uploads', express.static(`/home/luna/luna_iot/Luna-Iot/uploads`));
+// Simple HTTP server for Socket.IO
+const http = require('http');
+const app = require('express')();
 
-app.get('/', (req, res) => {
-    res.json({
-        success: true,
-        message: 'Server is running',
-        timestamp: new Date().toISOString()
-    });
-});
-app.use('/api/auth', authRoutes);
-app.use('/api', bloodDonationRoutes);
-app.use('/api', AuthMiddleware.verifyToken, roleRoutes);
-app.use('/api', AuthMiddleware.verifyToken, notificationRoutes);
-app.use('/api', AuthMiddleware.verifyToken, userRoutes);
-app.use('/api', AuthMiddleware.verifyToken, userPermissionRoutes);
-app.use('/api', AuthMiddleware.verifyToken, deviceRoutes);
-app.use('/api', AuthMiddleware.verifyToken, locationRoutes);
-app.use('/api', AuthMiddleware.verifyToken, statusRoutes);
-app.use('/api', AuthMiddleware.verifyToken, vehicleRoutes);
-app.use('/api', AuthMiddleware.verifyToken, geofenceRoutes);
-app.use('/api', AuthMiddleware.verifyToken, popupRoutes);
-app.use('/api', AuthMiddleware.verifyToken, rechargeRoutes);
-app.use('/api', relayRoutes);
+// Create HTTP server
+const server = http.createServer(app);
 
-// Middleware
-app.use(errorMiddleware);
+// Initialize Socket.IO
+socketService.initialize(server);
 
+// Start server
+async function startServer() {
+    try {
+        // Start HTTP server for Socket.IO
+        server.listen(SOCKET_PORT, () => {
+            console.log(`Socket.IO server running on port ${SOCKET_PORT}`);
+        });
 
+        // Start TCP listener
+        tcp.startServer(TCP_PORT);
+        console.log(`TCP listener started on port ${TCP_PORT}`);
 
-// Number of CPU for Cluster
-const numCPUs = os.cpus().length;
+        // Graceful shutdown
+        process.on('SIGINT', async () => {
+            console.log('Shutting down gracefully...');
+            await mysqlService.close();
+            process.exit(0);
+        });
 
-if (cluster.isMaster) {
-    // This block runs in the master process
-    console.log(`Master process ${process.pid} is running`);
-
-
-    // Start OTP cleanup service in master process
-    otpCleanupService.startCleanupScheduler();
-
-    // Database Backup
-    databaseBackupService.startBackupScheduler();
-
-
-    // Fork workers (one per CPU core)
-    for (let i = 0; i < numCPUs; i++) {
-        cluster.fork(); // Create a new worker
+    } catch (error) {
+        console.error('Server initialization failed:', error);
+        process.exit(1);
     }
-
-    // Listen for dying workers
-    cluster.on('exit', (worker, code, signal) => {
-        console.log(`Worker ${worker.process.pid} died. Starting a new one...`);
-        cluster.fork(); // Replace dead worker
-    });
-
-    // Handle inter-worker communication
-    cluster.on('message', (worker, message) => {
-        if (message.type === 'socket_broadcast') {
-            // Forward the message to all other workers
-            for (const id in cluster.workers) {
-                if (cluster.workers[id].id !== worker.id) {
-                    cluster.workers[id].send(message);
-                }
-            }
-        }
-    });
-
-    // Graceful shutdown
-    process.on('SIGINT', async () => {
-        console.log('Shutting down gracefully...');
-        await prisma.disconnect();
-        process.exit(0);
-    });
-
-} else {
-    // This block runs in each worker process
-    console.log(`Worker ${process.pid} started...`);
-    async function startWorker() {
-        try {
-            // Initialize Prisma in each worker
-            await prisma.connect();
-            console.log(`Worker ${process.pid}: Prisma connected`);
-
-            // Start HTTP server
-            const server = app.listen(API_PORT, () => {
-                console.log(`Worker ${process.pid}: API server running on port ${API_PORT}`);
-            });
-
-            // Initialize Socket.IO
-            socketService.initialize(server);
-
-            // Start TCP listener (only in first worker)
-            tcp.startServer(TCP_PORT);
-
-            // Graceful shutdown
-            process.on('SIGINT', async () => {
-                await prisma.disconnect();
-                process.exit(0);
-            });
-
-        } catch (error) {
-            console.error(`Worker ${process.pid} initialization failed:`, error);
-            process.exit(1);
-        }
-    }
-
-    startWorker();
 }
+
+startServer();
