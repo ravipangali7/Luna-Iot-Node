@@ -80,15 +80,12 @@ class GT06Handler {
                 ignitionChanged = true;
             }
 
-            // Show status data for specific IMEI
+            // Show save condition for specific IMEI
             if (data.imei.toString() === '352312094630210') {
-                console.log(`📊 Status Data - IMEI: ${data.imei}, Battery: ${statusData.battery}, Signal: ${statusData.signal}, Ignition: ${statusData.ignition}, Charging: ${statusData.charging}, Relay: ${statusData.relay}, Time: ${statusData.createdAt}`);
-                
-                if (latestStatus) {
-                    console.log(`🔍 COMPARISON - Old Ignition: ${latestStatus.ignition} (${typeof latestStatus.ignition}), New Ignition: ${statusData.ignition} (${typeof statusData.ignition})`);
-                    console.log(`🔍 CONVERTED - Old: ${Number(latestStatus.ignition)}, New: ${Number(statusData.ignition)}`);
-                    console.log(`🔍 IGNITION CHANGED: ${ignitionChanged}`);
-                    console.log(`🔍 SHOULD SAVE: ${shouldSave}`);
+                if (shouldSave) {
+                    console.log(`💾 SAVING - IMEI: ${data.imei}, Ignition: ${statusData.ignition}, Reason: Data changed`);
+                } else {
+                    console.log(`⏭️ SKIPPING - IMEI: ${data.imei}, Ignition: ${statusData.ignition}, Reason: Same data`);
                 }
             }
 
@@ -118,24 +115,45 @@ class GT06Handler {
                 createdAt: nepalTime
             };
 
+            // Filter: Check if location data has changed from latest
+            const latestLocation = await mysqlService.getLatestLocation(data.imei);
+
+            let shouldSaveLocation = true;
+            
+            if (latestLocation) {
+                // Check if all location fields are the same (convert boolean to number for comparison)
+                shouldSaveLocation = !(
+                    Number(latestLocation.latitude) === Number(locationData.latitude) &&
+                    Number(latestLocation.longitude) === Number(locationData.longitude) &&
+                    Number(latestLocation.speed) === Number(locationData.speed) &&
+                    Number(latestLocation.course) === Number(locationData.course) &&
+                    Number(latestLocation.realTimeGps) === Number(locationData.realTimeGps) &&
+                    Number(latestLocation.satellite) === Number(locationData.satellite) &&
+                    latestLocation.imei === locationData.imei
+                );
+            }
+
+            // Show save condition for specific IMEI
+            if (data.imei.toString() === '352312094630210') {
+                if (shouldSaveLocation) {
+                    console.log(`💾 SAVING LOCATION - IMEI: ${data.imei}, Lat: ${locationData.latitude}, Lon: ${locationData.longitude}, Speed: ${locationData.speed}, Reason: Data changed`);
+                } else {
+                    console.log(`⏭️ SKIPPING LOCATION - IMEI: ${data.imei}, Lat: ${locationData.latitude}, Lon: ${locationData.longitude}, Speed: ${locationData.speed}, Reason: Same data`);
+                }
+            }
+
             // First Phase: Check speed limit and send overspeeding notification
             GT06NotificationService.checkSpeedLimitAndNotify(data.imei, locationData.speed);
 
             // Second Phase: Check if vehicle is moving after ignition off
             GT06NotificationService.checkMovingAfterIgnitionOffAndNotify(data.imei);
 
-            // Filter: Check speed conditions
-            // let shouldSave = false;
-            // if (locationData.speed > 0 && locationData.speed >= 3) {
-            //     shouldSave = true;
-            // }
-
-            // if (shouldSave) {
-            // Save to database and send socket message
-            await mysqlService.insertLocation(locationData);
-            socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
-            socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
-            // }
+            if (shouldSaveLocation) {
+                // Save to database and send socket message
+                await mysqlService.insertLocation(locationData);
+                socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
+                socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
+            }
         } else if (data.event.string === 'login') {
             socketService.deviceMonitoringMessage('login', data.imei, null, null);
         } else if (data.event.string === 'alarm') {
