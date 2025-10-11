@@ -99,19 +99,25 @@ class GT06NotificationService {
     // Check if vehicle is moving after ignition off and send notification
     static async checkMovingAfterIgnitionOffAndNotify(imei) {
         try {
-            console.log(`🔍 Checking moving after ignition off for IMEI: ${imei}`);
+            if (imei === '352312094630210') {
+                console.log(`🔍 Checking moving after ignition off for IMEI: ${imei}`);
+            }
 
             // Get latest status and location data
             const latestStatus = await mysqlService.getLatestStatus(imei);
             const latestLocation = await mysqlService.getLatestLocation(imei);
 
             if (!latestStatus || !latestLocation) {
-                console.log(`❌ No status or location data found for IMEI: ${imei}`);
+                if (imei === '352312094630210') {
+                    console.log(`❌ No status or location data found for IMEI: ${imei}`);
+                }
                 return;
             }
 
-            console.log(`📊 Status - Ignition: ${latestStatus.ignition}, Created: ${latestStatus.created_at}`);
-            console.log(`📍 Location - Created: ${latestLocation.created_at}`);
+            if (imei === '352312094630210') {
+                console.log(`📊 Status - Ignition: ${latestStatus.ignition}, Created: ${latestStatus.created_at}`);
+                console.log(`📍 Location - Created: ${latestLocation.created_at}`);
+            }
 
             // Check if ignition is off
             if (!latestStatus.ignition) {
@@ -123,11 +129,13 @@ class GT06NotificationService {
                 const timeSinceIgnitionOff = (now - ignitionOffTime) / (1000 * 60);
                 const timeSinceLocation = (now - locationTime) / (1000 * 60);
                 
-                console.log(`⏱️ Time since ignition off: ${Math.round(timeSinceIgnitionOff)} minutes`);
-                console.log(`⏱️ Time since location: ${Math.round(timeSinceLocation)} minutes`);
-                console.log(`🔄 Location newer than ignition off: ${locationTime > ignitionOffTime}`);
-                console.log(`📅 Location recent (≤5min): ${timeSinceLocation <= 5}`);
-                console.log(`⏰ Ignition off long enough (≥2min): ${timeSinceIgnitionOff >= 2}`);
+                if (imei === '352312094630210') {
+                    console.log(`⏱️ Time since ignition off: ${Math.round(timeSinceIgnitionOff)} minutes`);
+                    console.log(`⏱️ Time since location: ${Math.round(timeSinceLocation)} minutes`);
+                    console.log(`🔄 Location newer than ignition off: ${locationTime > ignitionOffTime}`);
+                    console.log(`📅 Location recent (≤5min): ${timeSinceLocation <= 5}`);
+                    console.log(`⏰ Ignition off long enough (≥2min): ${timeSinceIgnitionOff >= 2}`);
+                }
                 
                 // Only check if:
                 // 1. Location is newer than status (vehicle moved after ignition off)
@@ -137,7 +145,9 @@ class GT06NotificationService {
                     timeSinceLocation <= 5 && 
                     timeSinceIgnitionOff >= 2) {
                     
-                    console.log(`🚨 SENDING NOTIFICATION for IMEI: ${imei}`);
+                    if (imei === '352312094630210') {
+                        console.log(`🚨 SENDING NOTIFICATION for IMEI: ${imei}`);
+                    }
                     
                     const vehicle = await mysqlService.getVehicleByImei(imei);
 
@@ -152,13 +162,19 @@ class GT06NotificationService {
                             timeSinceIgnitionOff: Math.round(timeSinceIgnitionOff)
                         });
                         
-                        console.log(`✅ Moving after ignition off notification sent for IMEI: ${imei}`);
+                        if (imei === '352312094630210') {
+                            console.log(`✅ Moving after ignition off notification sent for IMEI: ${imei}`);
+                        }
                     }
                 } else {
-                    console.log(`❌ Conditions not met for notification - IMEI: ${imei}`);
+                    if (imei === '352312094630210') {
+                        console.log(`❌ Conditions not met for notification - IMEI: ${imei}`);
+                    }
                 }
             } else {
-                console.log(`✅ Ignition is ON for IMEI: ${imei} - No notification needed`);
+                if (imei === '352312094630210') {
+                    console.log(`✅ Ignition is ON for IMEI: ${imei} - No notification needed`);
+                }
             }
         } catch (error) {
             console.error('Error checking moving after ignition off:', error);
