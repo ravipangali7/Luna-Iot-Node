@@ -5,6 +5,7 @@ const LocationModel = require('../../database/models/LocationModel');
 const socketService = require('../../socket/socket_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
 const datetimeService = require('../../utils/datetime_service');
+const axios = require('axios');
 
 class GT06Handler {
 
@@ -83,7 +84,7 @@ class GT06Handler {
 
             if (shouldSave) {
                 // Save to database and send socket message
-                await statusModel.createData(statusData);
+                await this.sendStatusToDjango(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
             }
@@ -114,8 +115,7 @@ class GT06Handler {
 
             // if (shouldSave) {
             // Save to database and send socket message
-            const locationModel = new LocationModel();
-            await locationModel.createData(locationData);
+            await this.sendLocationToDjango(locationData);
             socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
             socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
             // }
@@ -126,6 +126,65 @@ class GT06Handler {
         else {
             console.log('SORRY WE DIDNT HANDLE THAT');
             console.log(data);
+        }
+    }
+    
+    // Send status data to Django API (replaces StatusModel.createData)
+    async sendStatusToDjango(data) {
+        try {
+            const statusData = {
+                imei: data.imei,
+                battery: data.battery,
+                signal: data.signal,
+                ignition: data.ignition,
+                charging: data.charging,
+                relay: data.relay,
+                created_at: data.createdAt
+            };
+
+            console.log('Sending status to Django API:', statusData);
+
+            const response = await axios.post(`${process.env.DJANGO_API_URL || 'http://localhost:8000/api'}/device/status/`, statusData, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            return response.data;
+        } catch (error) {
+            console.error('Error sending status to Django API:', error.response?.data || error.message);
+            // Don't throw error - continue processing even if API call fails
+        }
+    }
+
+    // Send location data to Django API (replaces LocationModel.createData)
+    async sendLocationToDjango(data) {
+        try {
+            const locationData = {
+                imei: data.imei,
+                latitude: data.latitude,
+                longitude: data.longitude,
+                speed: data.speed,
+                course: data.course,
+                real_time_gps: data.realTimeGps,
+                satellite: data.satellite || 0,
+                created_at: data.createdAt
+            };
+
+            console.log('Sending location to Django API:', locationData);
+
+            const response = await axios.post(`${process.env.DJANGO_API_URL || 'http://localhost:8000/api'}/device/location/`, locationData, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            return response.data;
+        } catch (error) {
+            console.error('Error sending location to Django API:', error.response?.data || error.message);
+            // Don't throw error - continue processing even if API call fails
         }
     }
 
