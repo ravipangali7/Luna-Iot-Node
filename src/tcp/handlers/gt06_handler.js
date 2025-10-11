@@ -49,7 +49,7 @@ class GT06Handler {
             const signal = this.getSignal(data.gsmSigStrength);
             const nepalTime = datetimeService.getNepalDateTime(new Date());
             const statusData = {
-                deviceId: device.id,
+                deviceId: device.imei,
                 imei: data.imei.toString(),
                 battery: battery,
                 signal: signal,
@@ -87,7 +87,7 @@ class GT06Handler {
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
             const locationData = {
-                deviceId: device.id,
+                deviceId: device.imei,
                 imei: data.imei.toString(),
                 latitude: data.lat,
                 longitude: data.lon,
