@@ -19,13 +19,31 @@ class SocketService {
             pingInterval: 25000
         });
 
+        // Setup room management for targeted broadcasting
+        this._setupRoomManagement();
+    }
+
+    _setupRoomManagement() {
         this.io.on('connection', (socket) => {
             this.connectedClients.add(socket.id);
+            console.log(`✅ New client connected: ${socket.id}`);
+
+            // Join vehicle room
+            socket.on('join_vehicle', (imei) => {
+                socket.join(`vehicle:${imei}`);
+                console.log(`📥 Socket ${socket.id} joined room: vehicle:${imei}`);
+            });
+
+            // Leave vehicle room
+            socket.on('leave_vehicle', (imei) => {
+                socket.leave(`vehicle:${imei}`);
+                console.log(`📤 Socket ${socket.id} left room: vehicle:${imei}`);
+            });
 
             socket.on('disconnect', () => {
                 this.connectedClients.delete(socket.id);
+                console.log(`❌ Client disconnected: ${socket.id}`);
             });
-
         });
     }
 
@@ -82,8 +100,7 @@ class SocketService {
                 return;
             }
             
-            var data;
-            data = {
+            var data = {
                 imei: imei,
                 battery: battery,
                 signal: signal,
@@ -91,10 +108,13 @@ class SocketService {
                 charging: charging,
                 relay: relay,
                 createdAt: nepalTime
-            }
-            this._broadcastToAll('status_update', data);
+            };
+            
+            // Broadcast to vehicle-specific room only
+            this.io.to(`vehicle:${imei}`).emit('status_update', data);
+            console.log(`📡 Status update broadcasted to room: vehicle:${imei}`);
         } else {
-            console.log(`[Worker ${process.pid}] ❌ Socket.IO not initialized`);
+            console.log(`❌ Socket.IO not initialized`);
         }
     }
 
@@ -110,8 +130,11 @@ class SocketService {
                 satellite: satellite,
                 realTimeGps: realTimeGps,
                 createdAt: nepalTime
-            }
-            this._broadcastToAll('location_update', data);
+            };
+            
+            // Broadcast to vehicle-specific room only
+            this.io.to(`vehicle:${imei}`).emit('location_update', data);
+            console.log(`📡 Location update broadcasted to room: vehicle:${imei}`);
         }
     }
 
@@ -122,5 +145,4 @@ class SocketService {
 
 const socketService = new SocketService();
 
-module.exports = socketService;
 module.exports = socketService;
