@@ -59,7 +59,7 @@ class MySQLService {
 
     async insertStatus(data) {
         const sql = `
-            INSERT INTO statuses (device_id, imei, battery, signal, ignition, charging, relay)
+            INSERT INTO statuses (device_id, imei, battery, \`signal\`, ignition, charging, relay)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         const params = [
@@ -119,7 +119,7 @@ class MySQLService {
 
     async getLatestStatus(imei) {
         const sql = `
-            SELECT battery, signal, ignition, charging, relay, created_at
+            SELECT battery, \`signal\`, ignition, charging, relay, created_at
             FROM statuses
             WHERE imei = ?
             ORDER BY created_at DESC
