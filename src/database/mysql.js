@@ -59,8 +59,8 @@ class MySQLService {
 
     async insertStatus(data) {
         const sql = `
-            INSERT INTO statuses (device_id, imei, battery, \`signal\`, ignition, charging, relay)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO statuses (device_id, imei, battery, \`signal\`, ignition, charging, relay, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const params = [
             data.deviceId,
@@ -69,7 +69,8 @@ class MySQLService {
             data.signal,
             data.ignition,
             data.charging,
-            data.relay
+            data.relay,
+            data.createdAt || new Date()
         ];
         return this.query(sql, params);
     }

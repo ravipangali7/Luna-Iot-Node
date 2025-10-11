@@ -55,7 +55,8 @@ class GT06Handler {
                 signal: signal,
                 ignition: data.terminalInfo.ignition,
                 charging: data.terminalInfo.charging,
-                relay: data.terminalInfo.relayState
+                relay: data.terminalInfo.relayState,
+                createdAt: nepalTime
             };
 
             // Check ignition change and send notification BEFORE saving
