@@ -9,7 +9,7 @@ class GT06NotificationService {
     static COOLDOWN_PERIODS = {
         speed_alert: 5 * 60 * 1000, // 5 minutes
         ignition_change: 1 * 60 * 1000, // 1 minute
-        moving_after_ignition_off: 10 * 60 * 1000 // 10 minutes
+        moving_after_ignition_off: 30 * 60 * 1000 // 30 minutes
     };
     
     // Check if notification is in cooldown period
@@ -183,22 +183,40 @@ class GT06NotificationService {
 
             if (!latestStatus || !latestLocation) return;
 
-            // Check if ignition is off and location is newer than status
-            if (!latestStatus.ignition && latestLocation.created_at > latestStatus.created_at) {
-                const vehicle = await mysqlService.getVehicleByImei(imei);
-
-                if (vehicle) {
-                    const title = 'Vehicle Movement Alert';
-                    const message = `${vehicle.vehicle_no}: Vehicle is moving`;
-
-                    await this.sendVehicleNotification(imei, title, message, {
-                        type: 'moving_after_ignition_off',
-                        ignitionOffTime: latestStatus.created_at,
-                        lastLocationTime: latestLocation.created_at
-                    });
+            // Check if ignition is off
+            if (!latestStatus.ignition) {
+                const now = new Date();
+                const ignitionOffTime = new Date(latestStatus.created_at);
+                const locationTime = new Date(latestLocation.created_at);
+                
+                // Calculate time difference in minutes
+                const timeSinceIgnitionOff = (now - ignitionOffTime) / (1000 * 60);
+                const timeSinceLocation = (now - locationTime) / (1000 * 60);
+                
+                // Only check if:
+                // 1. Location is newer than status (vehicle moved after ignition off)
+                // 2. Location is recent (within last 5 minutes)
+                // 3. Ignition has been off for at least 2 minutes (to avoid false positives)
+                if (locationTime > ignitionOffTime && 
+                    timeSinceLocation <= 5 && 
+                    timeSinceIgnitionOff >= 2) {
                     
-                    // Set cooldown after sending notification
-                    this.setCooldown(imei, 'moving_after_ignition_off');
+                    const vehicle = await mysqlService.getVehicleByImei(imei);
+
+                    if (vehicle) {
+                        const title = 'Vehicle Movement Alert';
+                        const message = `${vehicle.vehicle_no}: Vehicle is moving after ignition was turned off ${Math.round(timeSinceIgnitionOff)} minutes ago`;
+
+                        await this.sendVehicleNotification(imei, title, message, {
+                            type: 'moving_after_ignition_off',
+                            ignitionOffTime: latestStatus.created_at,
+                            lastLocationTime: latestLocation.created_at,
+                            timeSinceIgnitionOff: Math.round(timeSinceIgnitionOff)
+                        });
+                        
+                        // Set cooldown after sending notification (30 minutes)
+                        this.setCooldown(imei, 'moving_after_ignition_off');
+                    }
                 }
             }
         } catch (error) {
