@@ -33,12 +33,6 @@ async function startServer() {
         tcp.startServer(TCP_PORT);
         console.log(`TCP listener started on port ${TCP_PORT}`);
 
-        // Start periodic cleanup of expired notification cooldowns (every 10 minutes)
-        setInterval(() => {
-            GT06NotificationService.clearExpiredCooldowns();
-            console.log('Cleared expired notification cooldowns');
-        }, 10 * 60 * 1000);
-
         // Graceful shutdown
         process.on('SIGINT', async () => {
             console.log('Shutting down gracefully...');

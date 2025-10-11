@@ -81,15 +81,16 @@ class GT06Handler {
             }
 
             if (shouldSave) {
+                // Check ignition change and send notification BEFORE saving to database
+                if (ignitionChanged) {
+                    const oldIgnitionStatus = latestStatus ? latestStatus.ignition : null;
+                    await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition, oldIgnitionStatus);
+                }
+                
                 // Save to database and send socket message
                 await mysqlService.insertStatus(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
-                
-                // Check ignition change and send notification AFTER saving and only if ignition actually changed
-                if (ignitionChanged) {
-                    await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition);
-                }
             }
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
