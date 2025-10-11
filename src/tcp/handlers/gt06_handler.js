@@ -75,18 +75,25 @@ class GT06Handler {
                 
                 // Check specifically if ignition changed
                 ignitionChanged = latestStatus.ignition !== statusData.ignition;
+                
+                console.log(`🔍 Status Check for IMEI: ${data.imei}`);
+                console.log(`📊 Old Status: battery=${latestStatus.battery}, signal=${latestStatus.signal}, ignition=${latestStatus.ignition}, charging=${latestStatus.charging}, relay=${latestStatus.relay}`);
+                console.log(`📊 New Status: battery=${statusData.battery}, signal=${statusData.signal}, ignition=${statusData.ignition}, charging=${statusData.charging}, relay=${statusData.relay}`);
+                console.log(`💾 Should Save: ${shouldSave}`);
+                console.log(`🔥 Ignition Changed: ${ignitionChanged}`);
             } else {
                 // If no previous status, consider ignition as changed
                 ignitionChanged = true;
+                console.log(`🔍 First Status for IMEI: ${data.imei} - Ignition Changed: ${ignitionChanged}`);
+            }
+
+            // Check ignition change and send notification BEFORE saving to database
+            if (ignitionChanged) {
+                const oldIgnitionStatus = latestStatus ? latestStatus.ignition : null;
+                await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition, oldIgnitionStatus);
             }
 
             if (shouldSave) {
-                // Check ignition change and send notification BEFORE saving to database
-                if (ignitionChanged) {
-                    const oldIgnitionStatus = latestStatus ? latestStatus.ignition : null;
-                    await GT06NotificationService.checkIgnitionChangeAndNotify(data.imei, statusData.ignition, oldIgnitionStatus);
-                }
-                
                 // Save to database and send socket message
                 await mysqlService.insertStatus(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
