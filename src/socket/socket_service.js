@@ -26,39 +26,21 @@ class SocketService {
                 this.connectedClients.delete(socket.id);
             });
 
-            process.on('message', (message) => {
-                if (message.type === 'socket_broadcast') {
-                    this._broadcastToAll(message.event, message.data);
-                }
-            });
         });
     }
 
     _broadcastToAll(event, data) {
         if (this.io) {
             try {
-                // ALWAYS broadcast - Socket.IO will handle routing to connected clients
+                // Direct broadcast to all connected clients
                 this.io.emit(event, data);
+                console.log(`📡 Broadcasted ${event} to ${this.io.engine.clientsCount} clients`);
             } catch (error) {
-                console.error(`[Worker ${process.pid}] ❌ Error broadcasting ${event}:`, error);
+                console.error(`❌ Error broadcasting ${event}:`, error);
             }
         }
     }
 
-    _broadcastToAllWorkers(event, data) {
-        // Send message to all other workers
-        if (process.send) {
-            process.send({
-                type: 'socket_broadcast',
-                event: event,
-                data: data,
-                fromWorker: process.pid
-            });
-        }
-
-        // Also broadcast to local clients
-        this._broadcastToAll(event, data);
-    }
 
     deviceMonitoringMessage(type, imei, lat, lon) {
         if (this.io) {
@@ -85,7 +67,7 @@ class SocketService {
                 default:
                     return; // Don't broadcast if type is not recognized
             }
-            this._broadcastToAllWorkers('device_monitoring', data);
+            this._broadcastToAll('device_monitoring', data);
         } else {
             console.log(`[Worker ${process.pid}] ❌ Socket.IO not initialized`);
         }
@@ -110,7 +92,7 @@ class SocketService {
                 relay: relay,
                 createdAt: nepalTime
             }
-            this._broadcastToAllWorkers('status_update', data);
+            this._broadcastToAll('status_update', data);
         } else {
             console.log(`[Worker ${process.pid}] ❌ Socket.IO not initialized`);
         }
@@ -129,7 +111,7 @@ class SocketService {
                 realTimeGps: realTimeGps,
                 createdAt: nepalTime
             }
-            this._broadcastToAllWorkers('location_update', data);
+            this._broadcastToAll('location_update', data);
         }
     }
 
@@ -140,4 +122,5 @@ class SocketService {
 
 const socketService = new SocketService();
 
+module.exports = socketService;
 module.exports = socketService;
