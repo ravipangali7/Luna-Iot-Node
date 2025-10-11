@@ -64,17 +64,17 @@ class GT06Handler {
             let ignitionChanged = false;
             
             if (latestStatus) {
-                // Check if all status fields are the same
+                // Check if all status fields are the same (convert boolean to number for comparison)
                 shouldSave = !(
                     latestStatus.battery === statusData.battery &&
                     latestStatus.signal === statusData.signal &&
-                    latestStatus.ignition === statusData.ignition &&
-                    latestStatus.charging === statusData.charging &&
-                    latestStatus.relay === statusData.relay
+                    Number(latestStatus.ignition) === Number(statusData.ignition) &&
+                    Number(latestStatus.charging) === Number(statusData.charging) &&
+                    Number(latestStatus.relay) === Number(statusData.relay)
                 );
                 
-                // Check specifically if ignition changed
-                ignitionChanged = latestStatus.ignition !== statusData.ignition;
+                // Check specifically if ignition changed (convert boolean to number for comparison)
+                ignitionChanged = Number(latestStatus.ignition) !== Number(statusData.ignition);
             } else {
                 // If no previous status, consider ignition as changed
                 ignitionChanged = true;
@@ -86,6 +86,7 @@ class GT06Handler {
                 
                 if (latestStatus) {
                     console.log(`🔍 COMPARISON - Old Ignition: ${latestStatus.ignition} (${typeof latestStatus.ignition}), New Ignition: ${statusData.ignition} (${typeof statusData.ignition})`);
+                    console.log(`🔍 CONVERTED - Old: ${Number(latestStatus.ignition)}, New: ${Number(statusData.ignition)}`);
                     console.log(`🔍 IGNITION CHANGED: ${ignitionChanged}`);
                     console.log(`🔍 SHOULD SAVE: ${shouldSave}`);
                 }
