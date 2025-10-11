@@ -76,15 +76,19 @@ class GT06Handler {
                 // Check specifically if ignition changed
                 ignitionChanged = latestStatus.ignition !== statusData.ignition;
                 
-                console.log(`🔍 Status Check for IMEI: ${data.imei}`);
-                console.log(`📊 Old Status: battery=${latestStatus.battery}, signal=${latestStatus.signal}, ignition=${latestStatus.ignition}, charging=${latestStatus.charging}, relay=${latestStatus.relay}`);
-                console.log(`📊 New Status: battery=${statusData.battery}, signal=${statusData.signal}, ignition=${statusData.ignition}, charging=${statusData.charging}, relay=${statusData.relay}`);
-                console.log(`💾 Should Save: ${shouldSave}`);
-                console.log(`🔥 Ignition Changed: ${ignitionChanged}`);
+                if (data.imei === '352312094630210') {
+                    console.log(`🔍 Status Check for IMEI: ${data.imei}`);
+                    console.log(`📊 Old Status: battery=${latestStatus.battery}, signal=${latestStatus.signal}, ignition=${latestStatus.ignition}, charging=${latestStatus.charging}, relay=${latestStatus.relay}`);
+                    console.log(`📊 New Status: battery=${statusData.battery}, signal=${statusData.signal}, ignition=${statusData.ignition}, charging=${statusData.charging}, relay=${statusData.relay}`);
+                    console.log(`💾 Should Save: ${shouldSave}`);
+                    console.log(`🔥 Ignition Changed: ${ignitionChanged}`);
+                }
             } else {
                 // If no previous status, consider ignition as changed
                 ignitionChanged = true;
-                console.log(`🔍 First Status for IMEI: ${data.imei} - Ignition Changed: ${ignitionChanged}`);
+                if (data.imei === '352312094630210') {
+                    console.log(`🔍 First Status for IMEI: ${data.imei} - Ignition Changed: ${ignitionChanged}`);
+                }
             }
 
             // Check ignition change and send notification BEFORE saving to database

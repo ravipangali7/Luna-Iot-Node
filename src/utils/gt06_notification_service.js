@@ -44,7 +44,9 @@ class GT06NotificationService {
     // Send ignition change notification
     static async checkIgnitionChangeAndNotify(imei, newIgnitionStatus, oldIgnitionStatus) {
         try {
-            console.log(`🔍 Sending ignition change notification for IMEI: ${imei}, Old: ${oldIgnitionStatus}, New: ${newIgnitionStatus}`);
+            if (imei === '352312094630210') {
+                console.log(`🔍 Sending ignition change notification for IMEI: ${imei}, Old: ${oldIgnitionStatus}, New: ${newIgnitionStatus}`);
+            }
             
             const vehicle = await mysqlService.getVehicleByImei(imei);
 
@@ -59,7 +61,9 @@ class GT06NotificationService {
                     oldIgnitionStatus: oldIgnitionStatus
                 });
                 
-                console.log(`✅ Ignition change notification sent for IMEI: ${imei}`);
+                if (imei === '352312094630210') {
+                    console.log(`✅ Ignition change notification sent for IMEI: ${imei}`);
+                }
             }
         } catch (error) {
             console.error('Error sending ignition change notification:', error);
