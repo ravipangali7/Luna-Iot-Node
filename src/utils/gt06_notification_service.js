@@ -18,7 +18,7 @@ class GT06NotificationService {
             const usersWithFcmTokens = users.filter(user => user.fcm_token && user.fcm_token.trim() !== '');
 
             if (usersWithFcmTokens.length === 0) {
-                console.log(`No users with FCM tokens found for IMEI: ${imei}`);
+                // console.log(`No users with FCM tokens found for IMEI: ${imei}`);
                 return;
             }
 
