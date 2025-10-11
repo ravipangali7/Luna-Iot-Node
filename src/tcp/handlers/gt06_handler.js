@@ -75,20 +75,14 @@ class GT06Handler {
                 
                 // Check specifically if ignition changed
                 ignitionChanged = latestStatus.ignition !== statusData.ignition;
-                
-                if (data.imei === '352312094630210') {
-                    console.log(`🔍 Status Check for IMEI: ${data.imei}`);
-                    console.log(`📊 Old Status: battery=${latestStatus.battery}, signal=${latestStatus.signal}, ignition=${latestStatus.ignition}, charging=${latestStatus.charging}, relay=${latestStatus.relay}`);
-                    console.log(`📊 New Status: battery=${statusData.battery}, signal=${statusData.signal}, ignition=${statusData.ignition}, charging=${statusData.charging}, relay=${statusData.relay}`);
-                    console.log(`💾 Should Save: ${shouldSave}`);
-                    console.log(`🔥 Ignition Changed: ${ignitionChanged}`);
-                }
             } else {
                 // If no previous status, consider ignition as changed
                 ignitionChanged = true;
-                if (data.imei === '352312094630210') {
-                    console.log(`🔍 First Status for IMEI: ${data.imei} - Ignition Changed: ${ignitionChanged}`);
-                }
+            }
+
+            // Show status data for specific IMEI
+            if (data.imei.toString() === '352312094630210') {
+                console.log(`📊 Status Data - IMEI: ${data.imei}, Battery: ${statusData.battery}, Signal: ${statusData.signal}, Ignition: ${statusData.ignition}, Charging: ${statusData.charging}, Relay: ${statusData.relay}, Time: ${statusData.createdAt}`);
             }
 
             // Check ignition change and send notification BEFORE saving to database
