@@ -26,23 +26,19 @@ class SocketService {
     _setupRoomManagement() {
         this.io.on('connection', (socket) => {
             this.connectedClients.add(socket.id);
-            console.log(`✅ New client connected: ${socket.id}`);
 
             // Join vehicle room
             socket.on('join_vehicle', (imei) => {
                 socket.join(`vehicle:${imei}`);
-                console.log(`📥 Socket ${socket.id} joined room: vehicle:${imei}`);
             });
 
             // Leave vehicle room
             socket.on('leave_vehicle', (imei) => {
                 socket.leave(`vehicle:${imei}`);
-                console.log(`📤 Socket ${socket.id} left room: vehicle:${imei}`);
             });
 
             socket.on('disconnect', () => {
                 this.connectedClients.delete(socket.id);
-                console.log(`❌ Client disconnected: ${socket.id}`);
             });
         });
     }
@@ -52,7 +48,6 @@ class SocketService {
             try {
                 // Direct broadcast to all connected clients
                 this.io.emit(event, data);
-                console.log(`📡 Broadcasted ${event} to ${this.io.engine.clientsCount} clients`);
             } catch (error) {
                 console.error(`❌ Error broadcasting ${event}:`, error);
             }
@@ -112,7 +107,6 @@ class SocketService {
             
             // Broadcast to vehicle-specific room only
             this.io.to(`vehicle:${imei}`).emit('status_update', data);
-            console.log(`📡 Status update broadcasted to room: vehicle:${imei}`);
         } else {
             console.log(`❌ Socket.IO not initialized`);
         }
@@ -134,7 +128,6 @@ class SocketService {
             
             // Broadcast to vehicle-specific room only
             this.io.to(`vehicle:${imei}`).emit('location_update', data);
-            console.log(`📡 Location update broadcasted to room: vehicle:${imei}`);
         }
     }
 

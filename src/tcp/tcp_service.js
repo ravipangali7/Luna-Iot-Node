@@ -21,7 +21,6 @@ class TCPService {
         const connectionData = this.connections.get(connectionId);
         if (connectionData && connectionData.deviceImei) {
             this.deviceImeiMap.delete(connectionData.deviceImei);
-            console.log(`Device ${connectionData.deviceImei} connection removed`);
         }
         this.connections.delete(connectionId);
     }
@@ -29,10 +28,6 @@ class TCPService {
     // Find connection by IMEI
     findConnectionByImei(imei) {
         const connectionId = this.deviceImeiMap.get(imei);
-        console.log(`Connection Device Size: ${this.deviceImeiMap.size}`);
-        for (const [imei, connectionId] of this.deviceImeiMap) {
-            console.log(`IMEI: ${imei} -> Connection: ${connectionId}`);
-        }
         if (!connectionId) return null;
         
         return this.connections.get(connectionId);
@@ -100,16 +95,9 @@ class TCPService {
 
     // Debug method to see all connections
     debugConnections() {
-        console.log('=== TCP CONNECTIONS DEBUG ===');
-        console.log('Total connections:', this.connections.size);
-        console.log('Device IMEI mappings:', this.deviceImeiMap.size);
-        
         for (const [imei, connectionId] of this.deviceImeiMap) {
             const connection = this.connections.get(connectionId);
-            console.log(`IMEI: ${imei} -> Connection: ${connectionId}`);
-            console.log(`  Socket destroyed: ${connection?.socket?.destroyed || 'N/A'}`);
-            console.log(`  Connected at: ${connection?.connectedAt || 'N/A'}`);
-        }
+         }
     }
 
     // Get connection count

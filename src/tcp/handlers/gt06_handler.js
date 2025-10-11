@@ -35,8 +35,6 @@ class GT06Handler {
     }
 
     async handleData(data, socket) {
-        // console.log("DATA: ",data);
-
         const device = await mysqlService.getDeviceByImei(data.imei);
 
         if (device === null) {

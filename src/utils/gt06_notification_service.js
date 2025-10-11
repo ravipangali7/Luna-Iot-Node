@@ -105,7 +105,6 @@ class GT06NotificationService {
         try {
             // Check if notification is in cooldown
             if (this.isInCooldown(imei, 'ignition_change')) {
-                console.log(`Ignition change notification for ${imei} is in cooldown`);
                 return;
             }
 
@@ -140,7 +139,6 @@ class GT06NotificationService {
         try {
             // Check if notification is in cooldown
             if (this.isInCooldown(imei, 'speed_alert')) {
-                console.log(`Speed alert notification for ${imei} is in cooldown`);
                 return;
             }
 
@@ -173,7 +171,7 @@ class GT06NotificationService {
         try {
             // Check if notification is in cooldown
             if (this.isInCooldown(imei, 'moving_after_ignition_off')) {
-                console.log(`Moving after ignition off notification for ${imei} is in cooldown`);
+                (`Moving after ignition off notification for ${imei} is in cooldown`);
                 return;
             }
 
