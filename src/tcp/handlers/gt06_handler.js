@@ -98,13 +98,17 @@ class GT06Handler {
             if (shouldSave) {
                 // Save to database and send socket message
                 await mysqlService.insertStatus(statusData);
+                // For new data, created_at = nepalTime (just inserted)
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
             } else {
                 // Same data - just update the timestamp
                 await mysqlService.updateStatusTimestamp(data.imei);
-                // Still send socket message for real-time updates
-                socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
+                // Get the original created_at from latest status
+                const latestAfterUpdate = await mysqlService.getLatestStatus(data.imei);
+                const createdAt = latestAfterUpdate?.created_at || nepalTime;
+                // Still send socket message for real-time updates with original created_at
+                socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, createdAt);
             }
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
@@ -156,13 +160,17 @@ class GT06Handler {
             if (shouldSaveLocation) {
                 // Save to database and send socket message
                 await mysqlService.insertLocation(locationData);
+                // For new data, created_at = nepalTime (just inserted)
                 socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
                 socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
             } else {
                 // Same data - just update the timestamp
                 await mysqlService.updateLocationTimestamp(data.imei);
-                // Still send socket message for real-time updates
-                socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
+                // Get the original created_at from latest location
+                const latestAfterUpdate = await mysqlService.getLatestLocation(data.imei);
+                const createdAt = latestAfterUpdate?.created_at || nepalTime;
+                // Still send socket message for real-time updates with original created_at
+                socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, createdAt);
             }
         } else if (data.event.string === 'login') {
             socketService.deviceMonitoringMessage('login', data.imei, null, null);

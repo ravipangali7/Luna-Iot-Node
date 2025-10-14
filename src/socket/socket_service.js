@@ -102,7 +102,7 @@ class SocketService {
                 ignition: ignition,
                 charging: charging,
                 relay: relay,
-                createdAt: nepalTime,
+                createdAt: created_at || nepalTime,  // Use DB created_at, fallback to current time
                 updatedAt: nepalTime
             };
             
@@ -124,7 +124,7 @@ class SocketService {
                 course: course,
                 satellite: satellite,
                 realTimeGps: realTimeGps,
-                createdAt: nepalTime,
+                createdAt: created_at || nepalTime,  // Use DB created_at, fallback to current time
                 updatedAt: nepalTime
             };
             
