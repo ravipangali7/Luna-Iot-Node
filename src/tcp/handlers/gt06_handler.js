@@ -107,6 +107,7 @@ class GT06Handler {
                 // Get the original created_at from latest status
                 const latestAfterUpdate = await mysqlService.getLatestStatus(data.imei);
                 const createdAt = latestAfterUpdate?.created_at || nepalTime;
+                console.log(`📅 [SAME STATUS] IMEI: ${data.imei} | created_at from DB: ${createdAt} | current time: ${nepalTime}`);
                 // Still send socket message for real-time updates with original created_at
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, createdAt);
             }
@@ -169,6 +170,7 @@ class GT06Handler {
                 // Get the original created_at from latest location
                 const latestAfterUpdate = await mysqlService.getLatestLocation(data.imei);
                 const createdAt = latestAfterUpdate?.created_at || nepalTime;
+                console.log(`📅 [SAME LOCATION] IMEI: ${data.imei} | created_at from DB: ${createdAt} | current time: ${nepalTime}`);
                 // Still send socket message for real-time updates with original created_at
                 socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, createdAt);
             }
