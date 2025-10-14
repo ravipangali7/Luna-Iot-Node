@@ -102,7 +102,8 @@ class SocketService {
                 ignition: ignition,
                 charging: charging,
                 relay: relay,
-                createdAt: nepalTime
+                createdAt: nepalTime,
+                updatedAt: nepalTime
             };
             
             // Broadcast to vehicle-specific room only
@@ -123,7 +124,8 @@ class SocketService {
                 course: course,
                 satellite: satellite,
                 realTimeGps: realTimeGps,
-                createdAt: nepalTime
+                createdAt: nepalTime,
+                updatedAt: nepalTime
             };
             
             // Broadcast to vehicle-specific room only

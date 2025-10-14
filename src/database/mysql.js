@@ -40,8 +40,8 @@ class MySQLService {
 
     async insertLocation(data) {
         const sql = `
-            INSERT INTO locations (device_id, imei, latitude, longitude, speed, course, real_time_gps, satellite, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO locations (device_id, imei, latitude, longitude, speed, course, real_time_gps, satellite, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const params = [
             data.deviceId,
@@ -52,15 +52,16 @@ class MySQLService {
             data.course,
             data.realTimeGps,
             data.satellite,
-            data.createdAt
+            data.createdAt,
+            data.updatedAt || new Date()
         ];
         return this.query(sql, params);
     }
 
     async insertStatus(data) {
         const sql = `
-            INSERT INTO statuses (device_id, imei, battery, \`signal\`, ignition, charging, relay, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO statuses (device_id, imei, battery, \`signal\`, ignition, charging, relay, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const params = [
             data.deviceId,
@@ -70,7 +71,8 @@ class MySQLService {
             data.ignition,
             data.charging,
             data.relay,
-            data.createdAt || new Date()
+            data.createdAt || new Date(),
+            data.updatedAt || new Date()
         ];
         return this.query(sql, params);
     }
@@ -108,7 +110,7 @@ class MySQLService {
 
     async getLatestLocation(imei) {
         const sql = `
-            SELECT latitude, longitude, speed, course, created_at
+            SELECT latitude, longitude, speed, course, created_at, updated_at
             FROM locations
             WHERE imei = ?
             ORDER BY created_at DESC
@@ -120,7 +122,7 @@ class MySQLService {
 
     async getLatestStatus(imei) {
         const sql = `
-            SELECT battery, \`signal\`, ignition, charging, relay, created_at
+            SELECT battery, \`signal\`, ignition, charging, relay, created_at, updated_at
             FROM statuses
             WHERE imei = ?
             ORDER BY created_at DESC
@@ -128,6 +130,28 @@ class MySQLService {
         `;
         const results = await this.query(sql, [imei]);
         return results[0] || null;
+    }
+
+    async updateStatusTimestamp(imei) {
+        const sql = `
+            UPDATE statuses 
+            SET updated_at = NOW() 
+            WHERE imei = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        `;
+        return this.query(sql, [imei]);
+    }
+
+    async updateLocationTimestamp(imei) {
+        const sql = `
+            UPDATE locations 
+            SET updated_at = NOW() 
+            WHERE imei = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        `;
+        return this.query(sql, [imei]);
     }
 
     async close() {

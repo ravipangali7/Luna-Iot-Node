@@ -100,6 +100,11 @@ class GT06Handler {
                 await mysqlService.insertStatus(statusData);
                 socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
+            } else {
+                // Same data - just update the timestamp
+                await mysqlService.updateStatusTimestamp(data.imei);
+                // Still send socket message for real-time updates
+                socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, nepalTime);
             }
         } else if (data.event.string === 'location') {
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
@@ -153,6 +158,11 @@ class GT06Handler {
                 await mysqlService.insertLocation(locationData);
                 socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
                 socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
+            } else {
+                // Same data - just update the timestamp
+                await mysqlService.updateLocationTimestamp(data.imei);
+                // Still send socket message for real-time updates
+                socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
             }
         } else if (data.event.string === 'login') {
             socketService.deviceMonitoringMessage('login', data.imei, null, null);
