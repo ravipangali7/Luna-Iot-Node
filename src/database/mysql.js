@@ -53,7 +53,7 @@ class MySQLService {
             data.realTimeGps,
             data.satellite,
             data.createdAt,
-            data.updatedAt || new Date()
+            data.createdAt  // Use same Nepal time as created_at
         ];
         return this.query(sql, params);
     }
@@ -72,7 +72,7 @@ class MySQLService {
             data.charging,
             data.relay,
             data.createdAt || new Date(),
-            data.updatedAt || new Date()
+            data.createdAt || new Date()  // Use same Nepal time as created_at
         ];
         return this.query(sql, params);
     }
@@ -133,25 +133,31 @@ class MySQLService {
     }
 
     async updateStatusTimestamp(imei) {
+        const datetimeService = require('../utils/datetime_service');
+        const nepalTime = datetimeService.nepalTimeDate();
+        
         const sql = `
             UPDATE statuses 
-            SET updated_at = NOW() 
+            SET updated_at = ? 
             WHERE imei = ? 
             ORDER BY created_at DESC 
             LIMIT 1
         `;
-        return this.query(sql, [imei]);
+        return this.query(sql, [nepalTime, imei]);
     }
 
     async updateLocationTimestamp(imei) {
+        const datetimeService = require('../utils/datetime_service');
+        const nepalTime = datetimeService.nepalTimeDate();
+        
         const sql = `
             UPDATE locations 
-            SET updated_at = NOW() 
+            SET updated_at = ? 
             WHERE imei = ? 
             ORDER BY created_at DESC 
             LIMIT 1
         `;
-        return this.query(sql, [imei]);
+        return this.query(sql, [nepalTime, imei]);
     }
 
     async close() {
