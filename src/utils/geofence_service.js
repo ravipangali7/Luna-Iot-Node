@@ -228,7 +228,6 @@ class GeofenceService {
                 }
             );
 
-            console.log(`✅ Geofence notification sent: ${vehicleNo} ${eventType.toLowerCase()} ${geofenceTitle} to ${fcmTokens.length} users`);
             
             return result;
 
