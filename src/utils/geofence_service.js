@@ -76,29 +76,25 @@ class GeofenceService {
 
             if (!lastEvent) {
                 // First time tracking this vehicle in this geofence
-                if (isCurrentlyInside && (geofenceType === 'Entry' || geofenceType === 'entry')) {
+                if (isCurrentlyInside) {
                     shouldNotify = true;
                     eventType = 'Entry';
-                } else if (!isCurrentlyInside) {
+                } else {
                     // Vehicle is outside, just record the state (no notification for initial outside state)
                     eventType = 'Exit';
                 }
             } else {
                 const wasInside = Boolean(lastEvent.is_inside);
                 
-                // State change detection
+                // State change detection - always notify on state changes
                 if (!wasInside && isCurrentlyInside) {
                     // Transition: Outside → Inside
-                    if (geofenceType === 'Entry' || geofenceType === 'entry') {
-                        shouldNotify = true;
-                        eventType = 'Entry';
-                    }
+                    shouldNotify = true;
+                    eventType = 'Entry';
                 } else if (wasInside && !isCurrentlyInside) {
                     // Transition: Inside → Outside
-                    if (geofenceType === 'Exit' || geofenceType === 'exit') {
-                        shouldNotify = true;
-                        eventType = 'Exit';
-                    }
+                    shouldNotify = true;
+                    eventType = 'Exit';
                 }
                 // If no state change (still inside or still outside), don't notify
             }
