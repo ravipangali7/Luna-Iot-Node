@@ -2,6 +2,7 @@ const Gt06 = require('gt06x22')
 const mysqlService = require('../../database/mysql');
 const socketService = require('../../socket/socket_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
+const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
 
 class GT06Handler {
@@ -174,6 +175,9 @@ class GT06Handler {
                 // Still send socket message for real-time updates with original created_at
                 socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, createdAt);
             }
+
+            // Check geofences for this location
+            geofenceService.checkGeofenceForLocation(data.imei, locationData.latitude, locationData.longitude);
         } else if (data.event.string === 'login') {
             socketService.deviceMonitoringMessage('login', data.imei, null, null);
         } else if (data.event.string === 'alarm') {

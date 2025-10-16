@@ -166,6 +166,81 @@ class MySQLService {
             console.log('MySQL connection pool closed');
         }
     }
+
+    // ==================== GEOFENCE METHODS ====================
+
+    async getGeofencesForVehicle(imei) {
+        const sql = `
+            SELECT 
+                g.id, 
+                g.title, 
+                g.type, 
+                g.boundary,
+                v.id as vehicle_id,
+                v.vehicle_no,
+                v.name as vehicle_name
+            FROM geofences g
+            INNER JOIN geofence_vehicles gv ON g.id = gv.geofence_id
+            INNER JOIN vehicles v ON gv.vehicle_id = v.id
+            WHERE v.imei = ? AND v.is_active = 1
+        `;
+        return this.query(sql, [imei]);
+    }
+
+    async getGeofenceUsers(geofenceId) {
+        const sql = `
+            SELECT DISTINCT u.id, u.name, u.phone, u.fcm_token
+            FROM users u
+            INNER JOIN geofence_users gu ON u.id = gu.user_id
+            WHERE gu.geofence_id = ? AND u.is_active = 1 AND u.fcm_token IS NOT NULL AND u.fcm_token != ''
+        `;
+        return this.query(sql, [geofenceId]);
+    }
+
+    async getLastGeofenceEvent(vehicleId, geofenceId) {
+        const sql = `
+            SELECT id, vehicle_id, geofence_id, is_inside, last_event_type, last_event_at, created_at, updated_at
+            FROM geofence_events
+            WHERE vehicle_id = ? AND geofence_id = ?
+            LIMIT 1
+        `;
+        const results = await this.query(sql, [vehicleId, geofenceId]);
+        return results[0] || null;
+    }
+
+    async insertGeofenceEvent(data) {
+        const sql = `
+            INSERT INTO geofence_events (vehicle_id, geofence_id, is_inside, last_event_type, last_event_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            data.vehicleId,
+            data.geofenceId,
+            data.isInside ? 1 : 0,
+            data.eventType,
+            data.eventAt,
+            data.eventAt,
+            data.eventAt
+        ];
+        return this.query(sql, params);
+    }
+
+    async updateGeofenceEvent(vehicleId, geofenceId, data) {
+        const sql = `
+            UPDATE geofence_events 
+            SET is_inside = ?, last_event_type = ?, last_event_at = ?, updated_at = ?
+            WHERE vehicle_id = ? AND geofence_id = ?
+        `;
+        const params = [
+            data.isInside ? 1 : 0,
+            data.eventType,
+            data.eventAt,
+            data.eventAt,
+            vehicleId,
+            geofenceId
+        ];
+        return this.query(sql, params);
+    }
 }
 
 module.exports = new MySQLService();
