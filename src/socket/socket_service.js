@@ -37,6 +37,18 @@ class SocketService {
                 socket.leave(`vehicle:${imei}`);
             });
 
+            // Join radar room
+            socket.on('join_radar', (token) => {
+                socket.join(`radar:${token}`);
+                console.log(`Client joined radar room: radar:${token}`);
+            });
+
+            // Leave radar room
+            socket.on('leave_radar', (token) => {
+                socket.leave(`radar:${token}`);
+                console.log(`Client left radar room: radar:${token}`);
+            });
+
             socket.on('disconnect', () => {
                 this.connectedClients.delete(socket.id);
             });
@@ -135,6 +147,32 @@ class SocketService {
 
     getConnectedClientsCount() {
         return this.io ? this.io.engine.clientsCount : 0;
+    }
+
+    broadcastAlertToRadars(radarTokens, alertData) {
+        if (!this.io) {
+            console.log('❌ Socket.IO not initialized');
+            return;
+        }
+
+        try {
+            // Prepare the alert notification payload
+            const notificationPayload = {
+                alert_id: alertData.id,
+                institute_id: alertData.institute_id,
+                alert_data: alertData
+            };
+
+            // Emit to each radar room
+            radarTokens.forEach(token => {
+                this.io.to(`radar:${token}`).emit('new_alert', notificationPayload);
+                console.log(`Alert notification sent to radar room: radar:${token}`);
+            });
+
+            console.log(`✅ Alert notification broadcasted to ${radarTokens.length} radar rooms`);
+        } catch (error) {
+            console.error('❌ Error broadcasting alert to radars:', error);
+        }
     }
 }
 

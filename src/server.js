@@ -15,11 +15,54 @@ const TCP_PORT = process.env.TCP_PORT || 6666;
 const http = require('http');
 const app = require('express')();
 
+// Add middleware for JSON parsing
+app.use(require('express').json());
+
 // Create HTTP server
 const server = http.createServer(app);
 
 // Initialize Socket.IO
 socketService.initialize(server);
+
+// Alert notification endpoint
+app.post('/api/alert-notification', (req, res) => {
+    try {
+        const { radar_tokens, alert_data } = req.body;
+        
+        if (!radar_tokens || !Array.isArray(radar_tokens) || !alert_data) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid request data. radar_tokens and alert_data are required.'
+            });
+        }
+        
+        if (radar_tokens.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: 'No radar tokens provided, no notifications sent.'
+            });
+        }
+        
+        // Broadcast alert to radar rooms
+        socketService.broadcastAlertToRadars(radar_tokens, alert_data);
+        
+        console.log(`Alert notification sent to ${radar_tokens.length} radar rooms`);
+        
+        res.json({
+            success: true,
+            message: `Alert notification sent to ${radar_tokens.length} radar rooms`,
+            radar_tokens: radar_tokens
+        });
+        
+    } catch (error) {
+        console.error('Error in alert notification endpoint:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
 
 // Start server
 async function startServer() {
