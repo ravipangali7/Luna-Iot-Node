@@ -235,32 +235,28 @@ class GT06Handler {
             try {
                 const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
                 if (alertSwitch && alertSwitch.instituteId) {
-                    // Build payload per Python AlertHistoryCreate requirements
-                    // Note: alert_type is required (FK). Mapping TBD; sending null will fail validation.
-                    // For now, attempt mapping common alarm types to alert_type IDs if provided via env or config; otherwise skip.
-                    const alertTypeId = process.env.DEFAULT_ALERT_TYPE_ID ? Number(process.env.DEFAULT_ALERT_TYPE_ID) : null;
-                    if (!alertTypeId) {
-                        console.warn('DEFAULT_ALERT_TYPE_ID not set; skipping alert history creation.');
-                    } else {
-                        const pythonAlertService = require('../../utils/python_alert_service');
-                        const payload = {
-                            source: 'switch',
-                            name: alertSwitch.name || 'Unknown',
-                            primary_phone: alertSwitch.primaryPhone || '',
-                            secondary_phone: alertSwitch.secondaryPhone || '',
-                            alert_type: alertTypeId,
-                            latitude: alertSwitch.latitude,
-                            longitude: alertSwitch.longitude,
-                            datetime: new Date().toISOString(),
-                            image: null,
-                            remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
-                            status: 'pending',
-                            institute: alertSwitch.instituteId
-                        };
-                        const result = await pythonAlertService.createAlertHistory(payload);
-                        if (!result.success) {
-                            console.error('Alert history creation failed:', result);
-                        }
+                    const pythonAlertService = require('../../utils/python_alert_service');
+                    // Determine alert_type id: env override, else default 0 for source 'switch'
+                    const envAlertType = process.env.DEFAULT_ALERT_TYPE_ID;
+                    const alertTypeId = envAlertType !== undefined ? Number(envAlertType) : 0;
+
+                    const payload = {
+                        source: 'switch',
+                        name: alertSwitch.name || 'Unknown',
+                        primary_phone: alertSwitch.primaryPhone || '',
+                        secondary_phone: alertSwitch.secondaryPhone || '',
+                        alert_type: alertTypeId,
+                        latitude: alertSwitch.latitude,
+                        longitude: alertSwitch.longitude,
+                        datetime: new Date().toISOString(),
+                        image: null,
+                        remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
+                        status: 'pending',
+                        institute: alertSwitch.instituteId
+                    };
+                    const result = await pythonAlertService.createAlertHistory(payload);
+                    if (!result.success) {
+                        console.error('Alert history creation failed:', result);
                     }
                 }
             } catch (err) {
