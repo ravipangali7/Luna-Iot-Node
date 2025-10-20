@@ -274,8 +274,16 @@ class GT06Handler {
     }
 
     getBattery(data) {
-        data = data.toLowerCase();
-        switch (data) {
+        if (data === null || data === undefined) {
+            return 0;
+        }
+        if (typeof data === 'number') {
+            // Clamp expected numeric range 0-6
+            const level = Math.max(0, Math.min(6, Math.floor(data)));
+            return level;
+        }
+        const str = String(data).toLowerCase();
+        switch (str) {
             case 'no power':
                 return 0;
             case 'extremely low battery':
@@ -290,14 +298,24 @@ class GT06Handler {
                 return 5;
             case 'very high':
                 return 6;
-            default:
-                return 0;
+            default: {
+                const parsed = parseInt(str, 10);
+                return Number.isFinite(parsed) ? Math.max(0, Math.min(6, parsed)) : 0;
+            }
         }
     }
 
     getSignal(data) {
-        data = data.toLowerCase();
-        switch (data) {
+        if (data === null || data === undefined) {
+            return 0;
+        }
+        if (typeof data === 'number') {
+            // Clamp expected numeric range 0-4
+            const level = Math.max(0, Math.min(4, Math.floor(data)));
+            return level;
+        }
+        const str = String(data).toLowerCase();
+        switch (str) {
             case 'no signal':
                 return 0;
             case 'extremely weak signal':
@@ -308,8 +326,10 @@ class GT06Handler {
                 return 3;
             case 'strong signal':
                 return 4;
-            default:
-                return 0;
+            default: {
+                const parsed = parseInt(str, 10);
+                return Number.isFinite(parsed) ? Math.max(0, Math.min(4, parsed)) : 0;
+            }
         }
     }
 
