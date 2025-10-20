@@ -89,6 +89,9 @@ class SocketService {
                 case 'imei_not_registered':
                     data = `${new Date().toISOString()} => IMEI NOT REGISTERED: ${imei}`;
                     break;
+                case 'alarm':
+                    data = `${new Date().toISOString()} => ALARM: ${imei} => Lat: ${lat} | Lon: ${lon}`;
+                    break;
                 default:
                     return; // Don't broadcast if type is not recognized
             }

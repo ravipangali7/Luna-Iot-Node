@@ -241,6 +241,73 @@ class MySQLService {
         ];
         return this.query(sql, params);
     }
+
+    // ==================== BUZZER STATUS METHODS ====================
+
+    async insertBuzzerStatus(data) {
+        const sql = `
+            INSERT INTO buzzer_status (device_id, imei, battery, \`signal\`, ignition, charging, relay, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            data.deviceId,
+            data.imei,
+            data.battery,
+            data.signal,
+            data.ignition,
+            data.charging,
+            data.relay,
+            data.createdAt || new Date(),
+            data.createdAt || new Date()  // Use same Nepal time as created_at
+        ];
+        return this.query(sql, params);
+    }
+
+    // ==================== SOS STATUS METHODS ====================
+
+    async insertSosStatus(data) {
+        const sql = `
+            INSERT INTO sos_switch_status (device_id, imei, battery, \`signal\`, ignition, charging, relay, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            data.deviceId,
+            data.imei,
+            data.battery,
+            data.signal,
+            data.ignition,
+            data.charging,
+            data.relay,
+            data.createdAt || new Date(),
+            data.createdAt || new Date()  // Use same Nepal time as created_at
+        ];
+        return this.query(sql, params);
+    }
+
+    // ==================== ALARM DATA METHODS ====================
+
+    async insertAlarmData(data) {
+        const sql = `
+            INSERT INTO alarm_data (device_id, imei, latitude, longitude, speed, real_time_gps, course, satellite, battery, \`signal\`, alarm, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            data.deviceId,
+            data.imei,
+            data.latitude,
+            data.longitude,
+            data.speed,
+            data.realTimeGps,
+            data.course,
+            data.satellite,
+            data.battery,
+            data.signal,
+            data.alarm,
+            data.createdAt,
+            data.createdAt  // Use same Nepal time as created_at
+        ];
+        return this.query(sql, params);
+    }
 }
 
 module.exports = new MySQLService();
