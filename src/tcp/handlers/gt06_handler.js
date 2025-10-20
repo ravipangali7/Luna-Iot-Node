@@ -236,9 +236,7 @@ class GT06Handler {
                 const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
                 if (alertSwitch && alertSwitch.instituteId) {
                     const pythonAlertService = require('../../utils/python_alert_service');
-                    // Determine alert_type id: env override, else default 0 for source 'switch'
-                    const envAlertType = process.env.DEFAULT_ALERT_TYPE_ID;
-                    const alertTypeId = envAlertType !== undefined ? Number(envAlertType) : 0;
+                    const alertTypeId = 999;
 
                     const payload = {
                         source: 'switch',
