@@ -246,14 +246,29 @@ class GT06Handler {
                     const pythonAlertService = require('../../utils/python_alert_service');
                     const alertTypeId = 999;
 
+                    // Get coordinates - use alarm GPS if valid, otherwise use switch location
+                    let alertLat = data.lat;
+                    let alertLon = data.lon;
+
+                    // Check if alarm has invalid GPS (0,0 or very close to 0,0)
+                    if (Math.abs(data.lat) < 0.001 && Math.abs(data.lon) < 0.001) {
+                        console.log(`⚠️ Alarm has invalid GPS (0,0), using switch location instead`);
+                        
+                        // Use switch's stored location
+                        alertLat = alertSwitch.latitude;
+                        alertLon = alertSwitch.longitude;
+                        
+                        console.log(`✅ Using switch location: Lat: ${alertLat}, Lon: ${alertLon}`);
+                    }
+
                     const payload = {
                         source: 'switch',
                         name: alertSwitch.name || 'Unknown',
                         primary_phone: alertSwitch.primaryPhone || '',
                         secondary_phone: alertSwitch.secondaryPhone || '',
                         alert_type: alertTypeId,
-                        latitude: data.lat,  // Use actual alarm GPS location
-                        longitude: data.lon, // Use actual alarm GPS location
+                        latitude: alertLat,  // Use switch location if alarm GPS is 0,0
+                        longitude: alertLon, // Use switch location if alarm GPS is 0,0
                         datetime: new Date().toISOString(),
                         image: null,
                         remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
