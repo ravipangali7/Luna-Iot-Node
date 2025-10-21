@@ -233,33 +233,15 @@ class GT06Handler {
 
             // ===== New: If device is linked to an alert switch with an institute, create alert history in Python API =====
             try {
-                console.log(`🔍 Checking alert switch for IMEI: ${data.imei}`);
                 const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
                 
-                if (!alertSwitch) {
-                    console.log(`❌ No alert switch found for IMEI: ${data.imei}`);
-                } else if (!alertSwitch.instituteId) {
-                    console.log(`❌ Alert switch found but no institute_id for IMEI: ${data.imei}`);
-                } else {
-                    console.log(`✅ Alert switch found for IMEI: ${data.imei}, Institute: ${alertSwitch.instituteId}`);
-                    
+                if (alertSwitch && alertSwitch.instituteId) {
                     const pythonAlertService = require('../../utils/python_alert_service');
                     const alertTypeId = 999;
 
-                    // Get coordinates - use alarm GPS if valid, otherwise use switch location
-                    let alertLat = data.lat;
-                    let alertLon = data.lon;
-
-                    // Check if alarm has invalid GPS (0,0 or very close to 0,0)
-                    if (Math.abs(data.lat) < 0.001 && Math.abs(data.lon) < 0.001) {
-                        console.log(`⚠️ Alarm has invalid GPS (0,0), using switch location instead`);
-                        
-                        // Use switch's stored location
-                        alertLat = alertSwitch.latitude;
-                        alertLon = alertSwitch.longitude;
-                        
-                        console.log(`✅ Using switch location: Lat: ${alertLat}, Lon: ${alertLon}`);
-                    }
+                    // Always use switch's stored location (not device GPS)
+                    const alertLat = alertSwitch.latitude;
+                    const alertLon = alertSwitch.longitude;
 
                     const payload = {
                         source: 'switch',
@@ -267,8 +249,8 @@ class GT06Handler {
                         primary_phone: alertSwitch.primaryPhone || '',
                         secondary_phone: alertSwitch.secondaryPhone || '',
                         alert_type: alertTypeId,
-                        latitude: alertLat,  // Use switch location if alarm GPS is 0,0
-                        longitude: alertLon, // Use switch location if alarm GPS is 0,0
+                        latitude: alertLat,
+                        longitude: alertLon,
                         datetime: new Date().toISOString(),
                         image: null,
                         remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
@@ -276,17 +258,14 @@ class GT06Handler {
                         institute: alertSwitch.instituteId
                     };
                     
-                    console.log(`📤 Sending alert history to Python API:`, JSON.stringify(payload, null, 2));
                     const result = await pythonAlertService.createAlertHistory(payload);
                     
-                    if (result.success) {
-                        console.log(`✅ Alert history created successfully for IMEI: ${data.imei}`);
-                    } else {
-                        console.error(`❌ Alert history creation failed for IMEI: ${data.imei}:`, result);
+                    if (!result.success) {
+                        console.error('Alert history creation failed:', result);
                     }
                 }
             } catch (err) {
-                console.error(`❌ Error during alert_switch lookup or alert history POST for IMEI: ${data.imei}:`, err.message);
+                console.error('Error during alert_switch lookup or alert history POST:', err.message);
             }
         }
         else {
