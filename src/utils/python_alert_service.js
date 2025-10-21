@@ -7,6 +7,9 @@ async function createAlertHistory(payload) {
     const url = `${PY_API_BASE_URL}/api/alert-system/alert-history/create/`;
 
     try {
+        console.log(`🌐 Calling Python API: ${url}`);
+        console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -21,14 +24,17 @@ async function createAlertHistory(payload) {
         let data;
         try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
 
+        console.log(`📡 Python API Response - Status: ${response.status}, Data:`, data);
+
         if (!response.ok) {
-            console.error('Failed to create alert history:', response.status, data);
+            console.error('❌ Failed to create alert history:', response.status, data);
             return { success: false, status: response.status, data };
         }
 
+        console.log('✅ Alert history created successfully via Python API');
         return { success: true, status: response.status, data };
     } catch (error) {
-        console.error('Error calling Python alert history API:', error.message);
+        console.error('❌ Error calling Python alert history API:', error.message);
         return { success: false, error: error.message };
     }
 }

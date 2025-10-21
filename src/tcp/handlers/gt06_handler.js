@@ -233,8 +233,16 @@ class GT06Handler {
 
             // ===== New: If device is linked to an alert switch with an institute, create alert history in Python API =====
             try {
+                console.log(`🔍 Checking alert switch for IMEI: ${data.imei}`);
                 const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
-                if (alertSwitch && alertSwitch.instituteId) {
+                
+                if (!alertSwitch) {
+                    console.log(`❌ No alert switch found for IMEI: ${data.imei}`);
+                } else if (!alertSwitch.instituteId) {
+                    console.log(`❌ Alert switch found but no institute_id for IMEI: ${data.imei}`);
+                } else {
+                    console.log(`✅ Alert switch found for IMEI: ${data.imei}, Institute: ${alertSwitch.instituteId}`);
+                    
                     const pythonAlertService = require('../../utils/python_alert_service');
                     const alertTypeId = 999;
 
@@ -244,21 +252,26 @@ class GT06Handler {
                         primary_phone: alertSwitch.primaryPhone || '',
                         secondary_phone: alertSwitch.secondaryPhone || '',
                         alert_type: alertTypeId,
-                        latitude: alertSwitch.latitude,
-                        longitude: alertSwitch.longitude,
+                        latitude: data.lat,  // Use actual alarm GPS location
+                        longitude: data.lon, // Use actual alarm GPS location
                         datetime: new Date().toISOString(),
                         image: null,
                         remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
                         status: 'pending',
                         institute: alertSwitch.instituteId
                     };
+                    
+                    console.log(`📤 Sending alert history to Python API:`, JSON.stringify(payload, null, 2));
                     const result = await pythonAlertService.createAlertHistory(payload);
-                    if (!result.success) {
-                        console.error('Alert history creation failed:', result);
+                    
+                    if (result.success) {
+                        console.log(`✅ Alert history created successfully for IMEI: ${data.imei}`);
+                    } else {
+                        console.error(`❌ Alert history creation failed for IMEI: ${data.imei}:`, result);
                     }
                 }
             } catch (err) {
-                console.error('Error during alert_switch lookup or alert history POST:', err.message);
+                console.error(`❌ Error during alert_switch lookup or alert history POST for IMEI: ${data.imei}:`, err.message);
             }
         }
         else {
