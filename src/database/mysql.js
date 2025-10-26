@@ -305,6 +305,38 @@ class MySQLService {
         return this.query(sql, params);
     }
 
+    async getLatestBuzzerStatus(imei) {
+        const sql = `
+            SELECT * FROM buzzer_status 
+            WHERE imei = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        `;
+        const results = await this.query(sql, [imei]);
+        return results.length > 0 ? results[0] : null;
+    }
+
+    async getLatestSosStatus(imei) {
+        const sql = `
+            SELECT * FROM sos_switch_status 
+            WHERE imei = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        `;
+        const results = await this.query(sql, [imei]);
+        return results.length > 0 ? results[0] : null;
+    }
+
+    async updateBuzzerStatusTimestamp(id, updatedAt) {
+        const sql = `UPDATE buzzer_status SET updated_at = ? WHERE id = ?`;
+        return this.query(sql, [updatedAt, id]);
+    }
+
+    async updateSosStatusTimestamp(id, updatedAt) {
+        const sql = `UPDATE sos_switch_status SET updated_at = ? WHERE id = ?`;
+        return this.query(sql, [updatedAt, id]);
+    }
+
     // ==================== ALARM DATA METHODS ====================
 
     async insertAlarmData(data) {

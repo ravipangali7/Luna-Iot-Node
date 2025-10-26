@@ -63,12 +63,52 @@ class GT06Handler {
 
             // Route based on device type
             if (deviceType === 'sos') {
-                // Save to sos_switch_status table
-                await mysqlService.insertSosStatus(statusData);
+                // Fetch latest status for comparison
+                const latestStatus = await mysqlService.getLatestSosStatus(data.imei);
+                
+                let shouldInsert = true;
+                if (latestStatus) {
+                    // Check if all status fields are the same
+                    shouldInsert = !(
+                        latestStatus.battery === statusData.battery &&
+                        latestStatus.signal === statusData.signal &&
+                        Number(latestStatus.ignition) === Number(statusData.ignition) &&
+                        Number(latestStatus.charging) === Number(statusData.charging) &&
+                        Number(latestStatus.relay) === Number(statusData.relay)
+                    );
+                }
+                
+                if (shouldInsert) {
+                    // Status changed - insert new row
+                    await mysqlService.insertSosStatus(statusData);
+                } else {
+                    // Status unchanged - update existing row's updated_at
+                    await mysqlService.updateSosStatusTimestamp(latestStatus.id, nepalTime);
+                }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
             } else if (deviceType === 'buzzer') {
-                // Save to buzzer_status table
-                await mysqlService.insertBuzzerStatus(statusData);
+                // Fetch latest status for comparison
+                const latestStatus = await mysqlService.getLatestBuzzerStatus(data.imei);
+                
+                let shouldInsert = true;
+                if (latestStatus) {
+                    // Check if all status fields are the same
+                    shouldInsert = !(
+                        latestStatus.battery === statusData.battery &&
+                        latestStatus.signal === statusData.signal &&
+                        Number(latestStatus.ignition) === Number(statusData.ignition) &&
+                        Number(latestStatus.charging) === Number(statusData.charging) &&
+                        Number(latestStatus.relay) === Number(statusData.relay)
+                    );
+                }
+                
+                if (shouldInsert) {
+                    // Status changed - insert new row
+                    await mysqlService.insertBuzzerStatus(statusData);
+                } else {
+                    // Status unchanged - update existing row's updated_at
+                    await mysqlService.updateBuzzerStatusTimestamp(latestStatus.id, nepalTime);
+                }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
             } else if (deviceType === 'gps') {
                 // Original GPS status handling logic
