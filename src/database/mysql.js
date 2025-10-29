@@ -100,7 +100,7 @@ class MySQLService {
 
     async getDeviceByImei(imei) {
         const sql = `
-            SELECT id, imei, phone, sim, protocol, iccid, model
+            SELECT id, imei, phone, sim, protocol, iccid, model, type
             FROM devices
             WHERE imei = ?
         `;
