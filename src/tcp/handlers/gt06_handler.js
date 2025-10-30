@@ -77,6 +77,38 @@ class GT06Handler {
                         Number(latestStatus.relay) === Number(statusData.relay)
                     );
                 }
+
+				// Edge detection: create alert_history when ignition transitions OFF (0) -> ON (1)
+				const currentIgnition = Number(statusData.ignition) === 1 ? 1 : 0;
+				const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
+				if (previousIgnition === 0 && currentIgnition === 1) {
+					try {
+						const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
+						if (alertSwitch && alertSwitch.instituteId) {
+							const pythonAlertService = require('../../utils/python_alert_service');
+							const payload = {
+								source: 'switch',
+								name: alertSwitch.name || 'Unknown',
+								primary_phone: alertSwitch.primaryPhone || '',
+								secondary_phone: alertSwitch.secondaryPhone || '',
+								alert_type: 999,
+								latitude: alertSwitch.latitude,
+								longitude: alertSwitch.longitude,
+								datetime: new Date().toISOString(),
+								image: null,
+								remarks: `Auto-created from SOS ignition ON (IMEI: ${data.imei})`,
+								status: 'pending',
+								institute: alertSwitch.instituteId
+							};
+							const result = await pythonAlertService.createAlertHistory(payload);
+							if (!result.success) {
+								console.error('Alert history creation failed (SOS ignition ON):', result);
+							}
+						}
+					} catch (err) {
+						console.error('Error creating alert history for SOS ignition ON:', err.message);
+					}
+				}
                 
                 if (shouldInsert) {
                     // Status changed - insert new row
