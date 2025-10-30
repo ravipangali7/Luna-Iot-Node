@@ -38,9 +38,19 @@ class SocketService {
             });
 
             // Join radar room
-            socket.on('join_radar', (token) => {
-                socket.join(`radar:${token}`);
-                console.log(`Client joined radar room: radar:${token}`);
+            socket.on('join_radar', (token, ack) => {
+                try {
+                    socket.join(`radar:${token}`);
+                    console.log(`Client joined radar room: radar:${token}`);
+                    if (typeof ack === 'function') {
+                        ack(true);
+                    }
+                } catch (e) {
+                    console.error('Error joining radar room:', e);
+                    if (typeof ack === 'function') {
+                        ack(false);
+                    }
+                }
             });
 
             // Leave radar room
