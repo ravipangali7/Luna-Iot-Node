@@ -91,7 +91,7 @@ class GT06Handler {
 								name: alertSwitch.name || 'Unknown',
 								primary_phone: alertSwitch.primaryPhone || '',
 								secondary_phone: alertSwitch.secondaryPhone || '',
-								alert_type: 999,
+								alert_type: 1,
 								latitude: alertSwitch.latitude,
 								longitude: alertSwitch.longitude,
 								datetime: new Date().toISOString(),
@@ -307,9 +307,9 @@ class GT06Handler {
             try {
                 const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
                 
-                if (alertSwitch && alertSwitch.instituteId) {
-                    const pythonAlertService = require('../../utils/python_alert_service');
-                    const alertTypeId = 999;
+					if (alertSwitch && alertSwitch.instituteId) {
+						const pythonAlertService = require('../../utils/python_alert_service');
+						const alertTypeId = 1;
 
                     // Always use switch's stored location (not device GPS)
                     const alertLat = alertSwitch.latitude;
@@ -320,7 +320,7 @@ class GT06Handler {
                         name: alertSwitch.name || 'Unknown',
                         primary_phone: alertSwitch.primaryPhone || '',
                         secondary_phone: alertSwitch.secondaryPhone || '',
-                        alert_type: alertTypeId,
+								alert_type: alertTypeId,
                         latitude: alertLat,
                         longitude: alertLon,
                         datetime: new Date().toISOString(),
