@@ -79,6 +79,8 @@ class GT06Handler {
                 }
 
 				// Edge detection: create alert_history when ignition transitions OFF (0) -> ON (1)
+                console.log('statusData.ignition', statusData.ignition);
+                console.log('latestStatus.ignition', latestStatus.ignition);
 				const currentIgnition = Number(statusData.ignition) === 1 ? 1 : 0;
 				const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
 				if (previousIgnition === 0 && currentIgnition === true) {
