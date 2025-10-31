@@ -81,7 +81,7 @@ class GT06Handler {
 				// Edge detection: create alert_history when ignition transitions OFF (0) -> ON (1)
 				const currentIgnition = Number(statusData.ignition) === 1 ? 1 : 0;
 				const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
-				if (previousIgnition === 0 && currentIgnition === 1) {
+				if (previousIgnition === 0 && currentIgnition === true) {
 					try {
 						const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
 						if (alertSwitch && alertSwitch.instituteId) {
