@@ -63,8 +63,20 @@ class GT06Handler {
 
             // Route based on device type
             if (deviceType === 'sos') {
+                const startTime = Date.now();
+                console.log(`[SOS STATUS] 🕐 START processing for IMEI: ${data.imei} at ${new Date().toISOString()}`);
+                
                 // Fetch latest status for comparison
+                const dbFetchStart = Date.now();
                 const latestStatus = await mysqlService.getLatestSosStatus(data.imei);
+                console.log(`[SOS STATUS] ⏱️ DB fetch took ${Date.now() - dbFetchStart}ms`);
+                
+                // Normalize incoming boolean to number: true -> 1, false -> 0
+                const currentIgnition = statusData.ignition === true ? 1 : 0;
+                const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
+                
+                // Check if ignition changed (force save if ignition changed)
+                const ignitionChanged = previousIgnition !== null && previousIgnition !== currentIgnition;
                 
                 let shouldInsert = true;
                 if (latestStatus) {
@@ -77,87 +89,102 @@ class GT06Handler {
                         Number(latestStatus.relay) === Number(statusData.relay)
                     );
                 }
-
-				// Edge detection: create alert_history when ignition transitions OFF (0) -> ON (1)
-				console.log(`[SOS IGNITION CHECK] IMEI: ${data.imei}`);
-				console.log(`[SOS IGNITION CHECK] Raw incoming ignition (boolean):`, statusData.ignition, typeof statusData.ignition);
-				console.log(`[SOS IGNITION CHECK] Previous ignition from DB (number):`, latestStatus ? latestStatus.ignition : 'null', latestStatus ? typeof latestStatus.ignition : 'N/A');
-				
-				// Normalize incoming boolean to number: true -> 1, false -> 0
-				const currentIgnition = statusData.ignition === true ? 1 : 0;
-				const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
-				
-				console.log(`[SOS IGNITION CHECK] Normalized current ignition: ${currentIgnition} (type: ${typeof currentIgnition})`);
-				console.log(`[SOS IGNITION CHECK] Normalized previous ignition: ${previousIgnition} (type: ${typeof previousIgnition})`);
-				
-				// Check for transition: OFF (0) -> ON (1)
-				if (previousIgnition === 0 && currentIgnition === 1) {
-					console.log(`[ALERT HISTORY] ⚡ Ignition transition detected: OFF (0) -> ON (1) for IMEI: ${data.imei}`);
-					
-					try {
-						const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
-						
-						if (!alertSwitch) {
-							console.log(`[ALERT HISTORY] ❌ Alert switch not found for IMEI: ${data.imei}`);
-						} else if (!alertSwitch.instituteId) {
-							console.log(`[ALERT HISTORY] ❌ Alert switch found but no instituteId for IMEI: ${data.imei}`, {
-								alertSwitchId: alertSwitch.id,
-								name: alertSwitch.name
-							});
-						} else {
-							console.log(`[ALERT HISTORY] ✅ Alert switch found with instituteId for IMEI: ${data.imei}`, {
-								alertSwitchId: alertSwitch.id,
-								name: alertSwitch.name,
-								instituteId: alertSwitch.instituteId,
-								latitude: alertSwitch.latitude,
-								longitude: alertSwitch.longitude
-							});
-							
-							const pythonAlertService = require('../../utils/python_alert_service');
-							const payload = {
-								source: 'switch',
-								name: alertSwitch.name || 'Unknown',
-								primary_phone: alertSwitch.primaryPhone || '',
-								secondary_phone: alertSwitch.secondaryPhone || '',
-								alert_type: 1,
-								latitude: alertSwitch.latitude,
-								longitude: alertSwitch.longitude,
-								datetime: new Date().toISOString(),
-								image: null,
-								remarks: `Auto-created from SOS ignition ON (IMEI: ${data.imei})`,
-								status: 'pending',
-								institute: alertSwitch.instituteId
-							};
-							
-							console.log(`[ALERT HISTORY] 📤 Sending payload to Python API:`, JSON.stringify(payload, null, 2));
-							
-							const result = await pythonAlertService.createAlertHistory(payload);
-							
-							if (result.success) {
-								console.log(`[ALERT HISTORY] ✅ Successfully created alert_history for IMEI: ${data.imei}`, {
-									status: result.status,
-									data: result.data
-								});
-							} else {
-								console.error(`[ALERT HISTORY] ❌ Failed to create alert_history for IMEI: ${data.imei}:`, result);
-							}
-						}
-					} catch (err) {
-						console.error(`[ALERT HISTORY] ❌ Error creating alert history for SOS ignition ON (IMEI: ${data.imei}):`, err.message);
-						console.error(err.stack);
-					}
-				} else {
-					console.log(`[SOS IGNITION CHECK] No transition detected. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
-				}
                 
+                // Force insert if ignition changed
+                if (ignitionChanged) {
+                    shouldInsert = true;
+                    console.log(`[SOS STATUS] ⚡ Ignition changed detected - forcing database save. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
+                }
+                
+                console.log(`[SOS IGNITION CHECK] IMEI: ${data.imei}`);
+                console.log(`[SOS IGNITION CHECK] Raw incoming ignition (boolean):`, statusData.ignition, typeof statusData.ignition);
+                console.log(`[SOS IGNITION CHECK] Previous ignition from DB (number):`, latestStatus ? latestStatus.ignition : 'null', latestStatus ? typeof latestStatus.ignition : 'N/A');
+                console.log(`[SOS IGNITION CHECK] Normalized current ignition: ${currentIgnition} (type: ${typeof currentIgnition})`);
+                console.log(`[SOS IGNITION CHECK] Normalized previous ignition: ${previousIgnition} (type: ${typeof previousIgnition})`);
+                
+                // SAVE TO DATABASE FIRST (immediate, don't wait for alert_history)
+                const dbSaveStart = Date.now();
                 if (shouldInsert) {
                     // Status changed - insert new row
                     await mysqlService.insertSosStatus(statusData);
+                    console.log(`[SOS STATUS] 💾 Database INSERT completed in ${Date.now() - dbSaveStart}ms`);
                 } else {
                     // Status unchanged - update existing row's updated_at
                     await mysqlService.updateSosStatusTimestamp(latestStatus.id, nepalTime);
+                    console.log(`[SOS STATUS] 💾 Database UPDATE completed in ${Date.now() - dbSaveStart}ms`);
                 }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
+                console.log(`[SOS STATUS] ⏱️ Total processing time (including DB save): ${Date.now() - startTime}ms`);
+
+                // NOW check for alert_history creation (non-blocking, fire-and-forget)
+                // Check for transition: OFF (0) -> ON (1)
+                if (previousIgnition === 0 && currentIgnition === 1) {
+                    console.log(`[ALERT HISTORY] ⚡ Ignition transition detected: OFF (0) -> ON (1) for IMEI: ${data.imei}`);
+                    
+                    // Fire-and-forget: Don't await, process in background
+                    (async () => {
+                        try {
+                            const alertSwitchStart = Date.now();
+                            const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
+                            console.log(`[ALERT HISTORY] ⏱️ Alert switch lookup took ${Date.now() - alertSwitchStart}ms`);
+                            
+                            if (!alertSwitch) {
+                                console.log(`[ALERT HISTORY] ❌ Alert switch not found for IMEI: ${data.imei}`);
+                            } else if (!alertSwitch.instituteId) {
+                                console.log(`[ALERT HISTORY] ❌ Alert switch found but no instituteId for IMEI: ${data.imei}`, {
+                                    alertSwitchId: alertSwitch.id,
+                                    name: alertSwitch.name
+                                });
+                            } else {
+                                console.log(`[ALERT HISTORY] ✅ Alert switch found with instituteId for IMEI: ${data.imei}`, {
+                                    alertSwitchId: alertSwitch.id,
+                                    name: alertSwitch.name,
+                                    instituteId: alertSwitch.instituteId,
+                                    latitude: alertSwitch.latitude,
+                                    longitude: alertSwitch.longitude
+                                });
+                                
+                                const pythonAlertService = require('../../utils/python_alert_service');
+                                const payload = {
+                                    source: 'switch',
+                                    name: alertSwitch.name || 'Unknown',
+                                    primary_phone: alertSwitch.primaryPhone || '',
+                                    secondary_phone: alertSwitch.secondaryPhone || '',
+                                    alert_type: 1,
+                                    latitude: alertSwitch.latitude,
+                                    longitude: alertSwitch.longitude,
+                                    datetime: new Date().toISOString(),
+                                    image: null,
+                                    remarks: `Auto-created from SOS ignition ON (IMEI: ${data.imei})`,
+                                    status: 'pending',
+                                    institute: alertSwitch.instituteId
+                                };
+                                
+                                console.log(`[ALERT HISTORY] 📤 Sending payload to Python API (non-blocking):`, JSON.stringify(payload, null, 2));
+                                
+                                const apiStart = Date.now();
+                                const result = await pythonAlertService.createAlertHistory(payload);
+                                const apiTime = Date.now() - apiStart;
+                                
+                                if (result.success) {
+                                    console.log(`[ALERT HISTORY] ✅ Successfully created alert_history for IMEI: ${data.imei} (API took ${apiTime}ms)`, {
+                                        status: result.status,
+                                        data: result.data
+                                    });
+                                } else {
+                                    console.error(`[ALERT HISTORY] ❌ Failed to create alert_history for IMEI: ${data.imei} (API took ${apiTime}ms):`, result);
+                                }
+                            }
+                        } catch (err) {
+                            console.error(`[ALERT HISTORY] ❌ Error creating alert history for SOS ignition ON (IMEI: ${data.imei}):`, err.message);
+                            console.error(err.stack);
+                        }
+                    })().catch(err => {
+                        console.error(`[ALERT HISTORY] ❌ Unhandled error in alert_history background task:`, err);
+                    });
+                } else {
+                    console.log(`[SOS IGNITION CHECK] No transition detected. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
+                }
             } else if (deviceType === 'buzzer') {
                 // Fetch latest status for comparison
                 const latestStatus = await mysqlService.getLatestBuzzerStatus(data.imei);
