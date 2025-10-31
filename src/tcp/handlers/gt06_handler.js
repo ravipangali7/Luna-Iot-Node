@@ -167,15 +167,6 @@ class GT06Handler {
                     ignitionChanged = true;
                 }
 
-                // Show save condition for specific IMEI
-                if (data.imei.toString() === '352312094630210') {
-                    if (shouldSave) {
-                        console.log(`💾 SAVING - IMEI: ${data.imei}, Ignition: ${statusData.ignition}, Reason: Data changed`);
-                    } else {
-                        console.log(`⏭️ SKIPPING - IMEI: ${data.imei}, Ignition: ${statusData.ignition}, Reason: Same data`);
-                    }
-                }
-
                 // Check ignition change and send notification BEFORE saving to database
                 if (ignitionChanged) {
                     const oldIgnitionStatus = latestStatus ? latestStatus.ignition : null;
@@ -237,15 +228,6 @@ class GT06Handler {
                     );
                 }
 
-                // Show save condition for specific IMEI
-                if (data.imei.toString() === '352312094630210') {
-                    if (shouldSaveLocation) {
-                        console.log(`💾 SAVING LOCATION - IMEI: ${data.imei}, Lat: ${locationData.latitude}, Lon: ${locationData.longitude}, Speed: ${locationData.speed}, Reason: Data changed`);
-                    } else {
-                        console.log(`⏭️ SKIPPING LOCATION - IMEI: ${data.imei}, Lat: ${locationData.latitude}, Lon: ${locationData.longitude}, Speed: ${locationData.speed}, Reason: Same data`);
-                    }
-                }
-
                 // First Phase: Check speed limit and send overspeeding notification
                 GT06NotificationService.checkSpeedLimitAndNotify(data.imei, locationData.speed);
 
@@ -302,43 +284,6 @@ class GT06Handler {
             socketService.deviceMonitoringMessage('alarm', data.imei, data.lat, data.lon);
             
             console.log(`🚨 ALARM - IMEI: ${data.imei}, Type: ${alarmType}, Lat: ${data.lat}, Lon: ${data.lon}, AlarmLang: ${data.alarmLang}`);
-
-            // ===== New: If device is linked to an alert switch with an institute, create alert history in Python API =====
-            try {
-                const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
-                
-					if (alertSwitch && alertSwitch.instituteId) {
-						const pythonAlertService = require('../../utils/python_alert_service');
-						const alertTypeId = 1;
-
-                    // Always use switch's stored location (not device GPS)
-                    const alertLat = alertSwitch.latitude;
-                    const alertLon = alertSwitch.longitude;
-
-                    const payload = {
-                        source: 'switch',
-                        name: alertSwitch.name || 'Unknown',
-                        primary_phone: alertSwitch.primaryPhone || '',
-                        secondary_phone: alertSwitch.secondaryPhone || '',
-								alert_type: alertTypeId,
-                        latitude: alertLat,
-                        longitude: alertLon,
-                        datetime: new Date().toISOString(),
-                        image: null,
-                        remarks: `Auto-created from device alarm (IMEI: ${data.imei}) - type: ${alarmType}`,
-                        status: 'pending',
-                        institute: alertSwitch.instituteId
-                    };
-                    
-                    const result = await pythonAlertService.createAlertHistory(payload);
-                    
-                    if (!result.success) {
-                        console.error('Alert history creation failed:', result);
-                    }
-                }
-            } catch (err) {
-                console.error('Error during alert_switch lookup or alert history POST:', err.message);
-            }
         }
         else {
             console.log('SORRY WE DIDNT HANDLE THAT');
