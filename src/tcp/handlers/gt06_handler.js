@@ -79,14 +79,40 @@ class GT06Handler {
                 }
 
 				// Edge detection: create alert_history when ignition transitions OFF (0) -> ON (1)
-                console.log('statusData.ignition', statusData.ignition);
-                console.log('latestStatus.ignition', latestStatus.ignition);
+				console.log(`[SOS IGNITION CHECK] IMEI: ${data.imei}`);
+				console.log(`[SOS IGNITION CHECK] Raw incoming ignition (boolean):`, statusData.ignition, typeof statusData.ignition);
+				console.log(`[SOS IGNITION CHECK] Previous ignition from DB (number):`, latestStatus ? latestStatus.ignition : 'null', latestStatus ? typeof latestStatus.ignition : 'N/A');
+				
+				// Normalize incoming boolean to number: true -> 1, false -> 0
 				const currentIgnition = statusData.ignition === true ? 1 : 0;
 				const previousIgnition = latestStatus ? Number(latestStatus.ignition) : null;
-				if (previousIgnition === 0 && currentIgnition === true) {
+				
+				console.log(`[SOS IGNITION CHECK] Normalized current ignition: ${currentIgnition} (type: ${typeof currentIgnition})`);
+				console.log(`[SOS IGNITION CHECK] Normalized previous ignition: ${previousIgnition} (type: ${typeof previousIgnition})`);
+				
+				// Check for transition: OFF (0) -> ON (1)
+				if (previousIgnition === 0 && currentIgnition === 1) {
+					console.log(`[ALERT HISTORY] ⚡ Ignition transition detected: OFF (0) -> ON (1) for IMEI: ${data.imei}`);
+					
 					try {
 						const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
-						if (alertSwitch && alertSwitch.instituteId) {
+						
+						if (!alertSwitch) {
+							console.log(`[ALERT HISTORY] ❌ Alert switch not found for IMEI: ${data.imei}`);
+						} else if (!alertSwitch.instituteId) {
+							console.log(`[ALERT HISTORY] ❌ Alert switch found but no instituteId for IMEI: ${data.imei}`, {
+								alertSwitchId: alertSwitch.id,
+								name: alertSwitch.name
+							});
+						} else {
+							console.log(`[ALERT HISTORY] ✅ Alert switch found with instituteId for IMEI: ${data.imei}`, {
+								alertSwitchId: alertSwitch.id,
+								name: alertSwitch.name,
+								instituteId: alertSwitch.instituteId,
+								latitude: alertSwitch.latitude,
+								longitude: alertSwitch.longitude
+							});
+							
 							const pythonAlertService = require('../../utils/python_alert_service');
 							const payload = {
 								source: 'switch',
@@ -102,14 +128,26 @@ class GT06Handler {
 								status: 'pending',
 								institute: alertSwitch.instituteId
 							};
+							
+							console.log(`[ALERT HISTORY] 📤 Sending payload to Python API:`, JSON.stringify(payload, null, 2));
+							
 							const result = await pythonAlertService.createAlertHistory(payload);
-							if (!result.success) {
-								console.error('Alert history creation failed (SOS ignition ON):', result);
+							
+							if (result.success) {
+								console.log(`[ALERT HISTORY] ✅ Successfully created alert_history for IMEI: ${data.imei}`, {
+									status: result.status,
+									data: result.data
+								});
+							} else {
+								console.error(`[ALERT HISTORY] ❌ Failed to create alert_history for IMEI: ${data.imei}:`, result);
 							}
 						}
 					} catch (err) {
-						console.error('Error creating alert history for SOS ignition ON:', err.message);
+						console.error(`[ALERT HISTORY] ❌ Error creating alert history for SOS ignition ON (IMEI: ${data.imei}):`, err.message);
+						console.error(err.stack);
 					}
+				} else {
+					console.log(`[SOS IGNITION CHECK] No transition detected. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
 				}
                 
                 if (shouldInsert) {
