@@ -30,18 +30,21 @@ This document describes what packets/data the server sends to devices via TCP co
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `HFYD#`
-- Hex: `0x48 0x46 0x59 0x44 0x23`
-- Bytes: `48 46 59 44 23`
-- Length: 5 bytes
+- ASCII: `RELAY,1#`
+- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x31 0x23`
+- Bytes: `52 45 4C 41 59 2C 31 23`
+- Length: 8 bytes
 
-**Purpose:** Turn relay ON on the device
+**Purpose:** Turn relay ON - Cut off oil/electricity supply
 
 **When Sent:** When server receives relay ON command request for the device
 
 **For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
 
-**Note:** No newline character (`\n`) - device expects exact format `HFYD#`
+**Important:** 
+- No newline character (`\n`) - device expects exact format `RELAY,1#`
+- GT06 device requires: GPS fix + vehicle speed < 20 km/h for command to execute
+- Command must be sent from authorized center number
 
 ---
 
@@ -50,18 +53,21 @@ This document describes what packets/data the server sends to devices via TCP co
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `DYD#`
-- Hex: `0x44 0x59 0x44 0x23`
-- Bytes: `44 59 44 23`
-- Length: 4 bytes
+- ASCII: `RELAY,0#`
+- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x30 0x23`
+- Bytes: `52 45 4C 41 59 2C 30 23`
+- Length: 8 bytes
 
-**Purpose:** Turn relay OFF on the device
+**Purpose:** Turn relay OFF - Restore oil/electricity supply
 
 **When Sent:** When server receives relay OFF command request for the device
 
 **For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
 
-**Note:** No newline character (`\n`) - device expects exact format `DYD#`
+**Important:**
+- No newline character (`\n`) - device expects exact format `RELAY,0#`
+- GT06 device requires: GPS fix + vehicle speed < 20 km/h for command to execute
+- Command must be sent from authorized center number
 
 ---
 
@@ -104,8 +110,8 @@ This document describes what packets/data the server sends to devices via TCP co
 | Command Type | Packet (ASCII) | Hex Format | Length | Purpose |
 |--------------|----------------|------------|--------|---------|
 | GT06 ACK | Auto-generated | `78780501...0d0a` | Variable | Acknowledge device data |
-| Relay ON | `HFYD#` | `48 46 59 44 23` | 5 bytes | Turn relay ON |
-| Relay OFF | `DYD#` | `44 59 44 23` | 4 bytes | Turn relay OFF |
+| Relay ON | `RELAY,1#` | `52 45 4C 41 59 2C 31 23` | 8 bytes | Cut off oil/electricity |
+| Relay OFF | `RELAY,0#` | `52 45 4C 41 59 2C 30 23` | 8 bytes | Restore oil/electricity |
 | RESET | `RESET#\n` | `52 45 53 45 54 23 0A` | 7 bytes | Reset device |
 | SERVER_POINT | `SERVER,IP:PORT#\n` | Variable | Variable | Configure server |
 
