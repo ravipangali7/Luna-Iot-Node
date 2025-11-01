@@ -170,7 +170,6 @@ class GT06Handler {
                         console.error(`[ALERT HISTORY] ❌ Unhandled error in alert_history background task:`, err);
                     });
                 } else {
-                    console.log(`[SOS IGNITION CHECK] No transition detected. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
                 }
             } else if (deviceType === 'buzzer') {
                 // Fetch latest status for comparison
