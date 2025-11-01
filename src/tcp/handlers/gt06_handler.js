@@ -233,23 +233,31 @@ class GT06Handler {
                         try {
                             const alertSwitchStart = Date.now();
                             const alertSwitch = await mysqlService.getAlertSwitchByImei(data.imei);
-                            console.log(`[ALERT HISTORY] ⏱️ Alert switch lookup took ${Date.now() - alertSwitchStart}ms`);
+                            if (data.imei === TARGET_IMEI) {
+                                console.log(`[ALERT HISTORY] ⏱️ Alert switch lookup took ${Date.now() - alertSwitchStart}ms`);
+                            }
                             
                             if (!alertSwitch) {
-                                console.log(`[ALERT HISTORY] ❌ Alert switch not found for IMEI: ${data.imei}`);
+                                if (data.imei === TARGET_IMEI) {
+                                    console.log(`[ALERT HISTORY] ❌ Alert switch not found for IMEI: ${data.imei}`);
+                                }
                             } else if (!alertSwitch.instituteId) {
-                                console.log(`[ALERT HISTORY] ❌ Alert switch found but no instituteId for IMEI: ${data.imei}`, {
-                                    alertSwitchId: alertSwitch.id,
-                                    name: alertSwitch.name
-                                });
+                                if (data.imei === TARGET_IMEI) {
+                                    console.log(`[ALERT HISTORY] ❌ Alert switch found but no instituteId for IMEI: ${data.imei}`, {
+                                        alertSwitchId: alertSwitch.id,
+                                        name: alertSwitch.name
+                                    });
+                                }
                             } else {
-                                console.log(`[ALERT HISTORY] ✅ Alert switch found with instituteId for IMEI: ${data.imei}`, {
-                                    alertSwitchId: alertSwitch.id,
-                                    name: alertSwitch.name,
-                                    instituteId: alertSwitch.instituteId,
-                                    latitude: alertSwitch.latitude,
-                                    longitude: alertSwitch.longitude
-                                });
+                                if (data.imei === TARGET_IMEI) {
+                                    console.log(`[ALERT HISTORY] ✅ Alert switch found with instituteId for IMEI: ${data.imei}`, {
+                                        alertSwitchId: alertSwitch.id,
+                                        name: alertSwitch.name,
+                                        instituteId: alertSwitch.instituteId,
+                                        latitude: alertSwitch.latitude,
+                                        longitude: alertSwitch.longitude
+                                    });
+                                }
                                 
                                 const pythonAlertService = require('../../utils/python_alert_service');
                                 const payload = {
@@ -267,27 +275,35 @@ class GT06Handler {
                                     institute: alertSwitch.instituteId
                                 };
                                 
-                                console.log(`[ALERT HISTORY] 📤 Sending payload to Python API (non-blocking):`, JSON.stringify(payload, null, 2));
+                                if (data.imei === TARGET_IMEI) {
+                                    console.log(`[ALERT HISTORY] 📤 Sending payload to Python API (non-blocking):`, JSON.stringify(payload, null, 2));
+                                }
                                 
                                 const apiStart = Date.now();
                                 const result = await pythonAlertService.createAlertHistory(payload);
                                 const apiTime = Date.now() - apiStart;
                                 
-                                if (result.success) {
-                                    console.log(`[ALERT HISTORY] ✅ Successfully created alert_history for IMEI: ${data.imei} (API took ${apiTime}ms)`, {
-                                        status: result.status,
-                                        data: result.data
-                                    });
-                                } else {
-                                    console.error(`[ALERT HISTORY] ❌ Failed to create alert_history for IMEI: ${data.imei} (API took ${apiTime}ms):`, result);
+                                if (data.imei === TARGET_IMEI) {
+                                    if (result.success) {
+                                        console.log(`[ALERT HISTORY] ✅ Successfully created alert_history for IMEI: ${data.imei} (API took ${apiTime}ms)`, {
+                                            status: result.status,
+                                            data: result.data
+                                        });
+                                    } else {
+                                        console.error(`[ALERT HISTORY] ❌ Failed to create alert_history for IMEI: ${data.imei} (API took ${apiTime}ms):`, result);
+                                    }
                                 }
                             }
                         } catch (err) {
-                            console.error(`[ALERT HISTORY] ❌ Error creating alert history for SOS ignition ON (IMEI: ${data.imei}):`, err.message);
-                            console.error(err.stack);
+                            if (data.imei === TARGET_IMEI) {
+                                console.error(`[ALERT HISTORY] ❌ Error creating alert history for SOS ignition ON (IMEI: ${data.imei}):`, err.message);
+                                console.error(err.stack);
+                            }
                         }
                     })().catch(err => {
-                        console.error(`[ALERT HISTORY] ❌ Unhandled error in alert_history background task:`, err);
+                        if (data.imei === TARGET_IMEI) {
+                            console.error(`[ALERT HISTORY] ❌ Unhandled error in alert_history background task:`, err);
+                        }
                     });
                 } else {
                 }
@@ -515,11 +531,17 @@ class GT06Handler {
             // Send socket notification for alarm events
             socketService.deviceMonitoringMessage('alarm', data.imei, data.lat, data.lon);
             
-            console.log(`🚨 ALARM - IMEI: ${data.imei}, Type: ${alarmType}, Lat: ${data.lat}, Lon: ${data.lon}, AlarmLang: ${data.alarmLang}`);
+            // Only log alarms for target IMEI
+            if (data.imei === TARGET_IMEI) {
+                console.log(`🚨 ALARM - IMEI: ${data.imei}, Type: ${alarmType}, Lat: ${data.lat}, Lon: ${data.lon}, AlarmLang: ${data.alarmLang}`);
+            }
         }
         else {
-            console.log('SORRY WE DIDNT HANDLE THAT');
-            console.log(data);
+            // Only log unhandled messages for target IMEI
+            if (data.imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] SORRY WE DIDNT HANDLE THAT`);
+                console.log(`[IMEI: ${TARGET_IMEI}] Data:`, data);
+            }
         }
     }
 

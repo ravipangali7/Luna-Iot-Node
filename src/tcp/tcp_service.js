@@ -377,12 +377,16 @@ class TCPService {
             }
             
             connection.socket.write(commandBuffer);
-            console.log(`Generic command sent to device ${imei}`);
+            if (imei === TARGET_IMEI) {
+                console.log(`Generic command sent to device ${imei}`);
+            }
             
             return { success: true };
             
         } catch (error) {
-            console.error(`Error sending generic command to device ${imei}:`, error);
+            if (imei === TARGET_IMEI) {
+                console.error(`Error sending generic command to device ${imei}:`, error);
+            }
             return { success: false, error: error.message };
         }
     }
@@ -587,12 +591,12 @@ class TCPService {
         // Normalize IMEI to string for consistent lookup
         const imeiStr = imei ? String(imei) : null;
         
-        // Entry log - show ALL calls, especially useful when IMEI is null/undefined
-        if (!imeiStr || imeiStr === TARGET_IMEI) {
+        // Entry log - only for target IMEI
+        if (imeiStr === TARGET_IMEI) {
             console.log(`[QUEUE] processQueuedCommands called - IMEI: ${imeiStr || 'NULL'}, IMEI type: ${typeof imei}, HasQueue: ${imeiStr ? this.commandQueue.has(imeiStr) : false}`);
             
             // Diagnostic: Show all queue keys for debugging type mismatch
-            if (imeiStr === TARGET_IMEI && this.commandQueue.size > 0) {
+            if (this.commandQueue.size > 0) {
                 const queueKeys = Array.from(this.commandQueue.keys());
                 const matchingKeys = queueKeys.filter(k => String(k) === imeiStr);
                 console.log(`[QUEUE] Queue keys for debugging - Total queues: ${queueKeys.length}, Looking for: ${imeiStr}, Matching keys: ${matchingKeys.length}, Sample keys: ${queueKeys.slice(0, 3).map(k => `${k}(${typeof k})`).join(', ')}`);
@@ -757,7 +761,9 @@ class TCPService {
         const imeiStr = imei ? String(imei) : null;
         if (imeiStr && this.commandQueue.has(imeiStr)) {
             this.commandQueue.delete(imeiStr);
-            console.log(`Cleared command queue for device ${imeiStr}`);
+            if (imeiStr === TARGET_IMEI) {
+                console.log(`Cleared command queue for device ${imeiStr}`);
+            }
         }
     }
 
@@ -785,7 +791,15 @@ class TCPService {
         }
 
         if (expiredCount > 0) {
-            console.log(`Expired ${expiredCount} old commands from queue`);
+            // Only log if target IMEI had expired commands
+            const targetImeiExpired = this.commandQueue.has(TARGET_IMEI) && 
+                this.commandQueue.get(TARGET_IMEI).some(cmd => {
+                    const age = now - cmd.timestamp;
+                    return age >= expiryMs;
+                });
+            if (targetImeiExpired) {
+                console.log(`Expired ${expiredCount} old commands from queue`);
+            }
         }
     }
 

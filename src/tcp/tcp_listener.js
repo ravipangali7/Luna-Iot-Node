@@ -111,21 +111,23 @@ class TCPListener {
 
             // Handle errors
             socket.on('error', (err) => {
-                const errorMessage = err.message || 'Unknown error';
-                console.error(`[Worker ${process.pid}] Client error for ${connectionId}:`, errorMessage);
-
-                // Log more details for debugging
-                if (err.code === 'ETIMEDOUT') {
-                    console.log(`[Worker ${process.pid}] Connection timeout for device ${socket.deviceImei || 'Unknown'}`);
-                }
+                const isTargetImei = connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI;
                 
-                // Log errors for target IMEI
-                if (connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                // Only log for target IMEI
+                if (isTargetImei) {
+                    const errorMessage = err.message || 'Unknown error';
+                    console.error(`[Worker ${process.pid}] Client error for ${connectionId}:`, errorMessage);
+
+                    // Log more details for debugging
+                    if (err.code === 'ETIMEDOUT') {
+                        console.log(`[Worker ${process.pid}] Connection timeout for device ${socket.deviceImei || 'Unknown'}`);
+                    }
+                    
                     console.error(`[IMEI: ${TARGET_IMEI}] ❌ Connection error - Error: ${err.message}, Code: ${err.code}, ConnectionId: ${connectionId}, Timestamp: ${new Date().toISOString()}`);
+                    console.error(`${new Date().toISOString()} => CLIENT ERROR =>`, err.message);
                 }
                 
                 socketService.deviceMonitoringMessage('disconnected', null, null, null);
-                console.error(`${new Date().toISOString()} => CLIENT ERROR =>`, err.message);
                 this.connections.delete(connectionId);
                 tcpService.removeConnection(connectionId);
             });
@@ -140,11 +142,10 @@ class TCPListener {
             // Timeout handler - log but keep connection alive (don't close)
             // Connection will reset timeout on next data packet
             socket.on('timeout', () => {
-                const deviceInfo = socket.deviceImei ? `device ${socket.deviceImei}` : 'unknown device';
-                console.log(`[Worker ${process.pid}] Socket idle timeout for ${connectionId} (${deviceInfo}), but keeping connection alive`);
-                
-                // Log timeout for target IMEI
+                // Only log timeout for target IMEI
                 if (connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    const deviceInfo = socket.deviceImei ? `device ${socket.deviceImei}` : 'unknown device';
+                    console.log(`[Worker ${process.pid}] Socket idle timeout for ${connectionId} (${deviceInfo}), but keeping connection alive`);
                     console.log(`[IMEI: ${TARGET_IMEI}] ⏱️ Socket idle timeout - ConnectionId: ${connectionId}, LastActivity: ${connectionData.lastActivityAt.toISOString()}, Keeping connection alive`);
                 }
                 
