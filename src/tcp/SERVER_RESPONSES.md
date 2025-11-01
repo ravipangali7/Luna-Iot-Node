@@ -30,16 +30,18 @@ This document describes what packets/data the server sends to devices via TCP co
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `RELAY,1#\n`
-- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x31 0x23 0x0A`
-- Bytes: `52 45 4C 41 59 2C 31 23 0A`
-- Length: 9 bytes
+- ASCII: `HFYD#`
+- Hex: `0x48 0x46 0x59 0x44 0x23`
+- Bytes: `48 46 59 44 23`
+- Length: 5 bytes
 
 **Purpose:** Turn relay ON on the device
 
 **When Sent:** When server receives relay ON command request for the device
 
 **For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
+
+**Note:** No newline character (`\n`) - device expects exact format `HFYD#`
 
 ---
 
@@ -48,16 +50,18 @@ This document describes what packets/data the server sends to devices via TCP co
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `RELAY,0#\n`
-- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x30 0x23 0x0A`
-- Bytes: `52 45 4C 41 59 2C 30 23 0A`
-- Length: 9 bytes
+- ASCII: `DYD#`
+- Hex: `0x44 0x59 0x44 0x23`
+- Bytes: `44 59 44 23`
+- Length: 4 bytes
 
 **Purpose:** Turn relay OFF on the device
 
 **When Sent:** When server receives relay OFF command request for the device
 
 **For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
+
+**Note:** No newline character (`\n`) - device expects exact format `DYD#`
 
 ---
 
@@ -100,8 +104,8 @@ This document describes what packets/data the server sends to devices via TCP co
 | Command Type | Packet (ASCII) | Hex Format | Length | Purpose |
 |--------------|----------------|------------|--------|---------|
 | GT06 ACK | Auto-generated | `78780501...0d0a` | Variable | Acknowledge device data |
-| Relay ON | `RELAY,1#\n` | `52 45 4C 41 59 2C 31 23 0A` | 9 bytes | Turn relay ON |
-| Relay OFF | `RELAY,0#\n` | `52 45 4C 41 59 2C 30 23 0A` | 9 bytes | Turn relay OFF |
+| Relay ON | `HFYD#` | `48 46 59 44 23` | 5 bytes | Turn relay ON |
+| Relay OFF | `DYD#` | `44 59 44 23` | 4 bytes | Turn relay OFF |
 | RESET | `RESET#\n` | `52 45 53 45 54 23 0A` | 7 bytes | Reset device |
 | SERVER_POINT | `SERVER,IP:PORT#\n` | Variable | Variable | Configure server |
 
