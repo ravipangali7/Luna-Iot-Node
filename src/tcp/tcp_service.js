@@ -1,6 +1,9 @@
 const net = require('net');
 require('dotenv').config();
 
+// Target IMEI for detailed logging
+const TARGET_IMEI = '352312094594994';
+
 class TCPService {
     constructor() {
         this.connections = new Map();
@@ -49,6 +52,11 @@ class TCPService {
         try {
             console.log(`[RELAY COMMAND] Starting relay command - IMEI: ${imei}, Command: ${command}, Timestamp: ${new Date().toISOString()}`);
             
+            // Target IMEI specific logging
+            if (imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] 🔌 RELAY COMMAND REQUEST - Command: ${command}, Timestamp: ${new Date().toISOString()}`);
+            }
+            
             const connection = this.findConnectionByImei(imei);
             
             // Check if device is connected and socket is valid
@@ -57,6 +65,11 @@ class TCPService {
                 console.log(`[RELAY COMMAND] Device ${imei} not connected - queuing command ${command}`);
                 this.queueCommand(imei, 'RELAY', command);
                 console.log(`[RELAY COMMAND] Relay command ${command} queued for device ${imei}`);
+                
+                // Target IMEI specific logging
+                if (imei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] ⏳ Relay command ${command} QUEUED (device offline) - Will be sent when device connects`);
+                }
                 return { 
                     success: true, 
                     command: command, 
@@ -84,6 +97,12 @@ class TCPService {
             
             console.log(`[RELAY COMMAND] ✅ Relay command ${command} sent successfully to device ${imei} via TCP`);
             
+            // Target IMEI specific logging with packet details
+            if (imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING RELAY COMMAND - Command: ${command}, Packet Hex: ${relayCommand.toString('hex')}, Packet ASCII: ${relayCommand.toString('ascii').replace('\n', '\\n')}, Length: ${relayCommand.length} bytes, Timestamp: ${new Date().toISOString()}`);
+                console.log(`[IMEI: ${TARGET_IMEI}] Relay command packet bytes:`, Array.from(relayCommand).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+            }
+            
             return { success: true, command: command, queued: false };
             
         } catch (error) {
@@ -96,6 +115,11 @@ class TCPService {
     async sendCommand(imei, commandType, params = {}) {
         try {
             console.log(`[TCP COMMAND] Received command request - IMEI: ${imei}, CommandType: ${commandType}, Params:`, params, `Timestamp: ${new Date().toISOString()}`);
+            
+            // Target IMEI specific logging
+            if (imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] 🎯 COMMAND REQUEST - Type: ${commandType}, Params:`, params, `Timestamp: ${new Date().toISOString()}`);
+            }
             
             const connection = this.findConnectionByImei(imei);
             
@@ -133,6 +157,12 @@ class TCPService {
             
             console.log(`[TCP COMMAND] ✅ Command ${commandType} sent successfully to device ${imei} via TCP`);
             
+            // Target IMEI specific logging with packet details
+            if (imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING COMMAND - Type: ${commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Packet ASCII: ${commandBuffer.toString('ascii').replace('\n', '\\n')}, Length: ${commandBuffer.length} bytes, Timestamp: ${new Date().toISOString()}`);
+                console.log(`[IMEI: ${TARGET_IMEI}] Command packet bytes:`, Array.from(commandBuffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+            }
+            
             return { success: true, commandType: commandType, queued: false };
             
         } catch (error) {
@@ -165,6 +195,30 @@ class TCPService {
         }
     }
 
+    // ========================================
+    // SERVER COMMAND PACKETS SENT TO DEVICES
+    // ========================================
+    // 
+    // 2. RELAY ON COMMAND
+    //    Packet: 'HFYD#\n' (hex: 0x48 0x46 0x59 0x44 0x23 0x0A)
+    //    Purpose: Turn relay ON on device
+    //    Location: tcp_service.js sendRelayCommand() method
+    //
+    // 3. RELAY OFF COMMAND  
+    //    Packet: 'DYD#\n' (hex: 0x44 0x59 0x44 0x23 0x0A)
+    //    Purpose: Turn relay OFF on device
+    //    Location: tcp_service.js sendRelayCommand() method
+    //
+    // 4. RESET COMMAND
+    //    Packet: 'RESET#\n' (hex: 0x52 0x45 0x53 0x45 0x54 0x23 0x0A)
+    //    Purpose: Reset device
+    //    Location: tcp_service.js getCommandBuffer() method
+    //
+    // 5. SERVER POINT COMMAND
+    //    Packet: 'SERVER,IP:PORT#\n' (format varies by implementation)
+    //    Purpose: Configure server IP and port on device
+    //    Location: tcp_service.js getCommandBuffer() method
+    //
     // Map command types to GT06 protocol buffers
     getCommandBuffer(commandType, params = {}) {
         switch (commandType) {
@@ -242,6 +296,11 @@ class TCPService {
 
         console.log(`[QUEUE PROCESS] Processing ${commands.length} queued commands for device ${imei} - Timestamp: ${new Date().toISOString()}`);
 
+        // Target IMEI specific logging
+        if (imei === TARGET_IMEI) {
+            console.log(`[IMEI: ${TARGET_IMEI}] 📬 Processing ${commands.length} queued commands - Timestamp: ${new Date().toISOString()}`);
+        }
+
         // Sort by priority (higher priority first)
         commands.sort((a, b) => b.priority - a.priority);
         console.log(`[QUEUE PROCESS] Commands sorted by priority for device ${imei}`);
@@ -258,6 +317,11 @@ class TCPService {
                     connection.socket.write(commandBuffer);
                     processed++;
                     console.log(`[QUEUE PROCESS] ✅ Queued command ${cmd.commandType} sent to device ${imei} via TCP`);
+                    
+                    // Target IMEI specific logging
+                    if (imei === TARGET_IMEI) {
+                        console.log(`[IMEI: ${TARGET_IMEI}] 📤 SENDING QUEUED COMMAND - Type: ${cmd.commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Length: ${commandBuffer.length} bytes, Timestamp: ${new Date().toISOString()}`);
+                    }
                 } else {
                     console.warn(`[QUEUE PROCESS] ⚠️ Invalid command type ${cmd.commandType} for device ${imei}, skipping`);
                     failed++;

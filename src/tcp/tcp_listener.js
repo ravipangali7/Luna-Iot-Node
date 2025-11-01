@@ -4,6 +4,9 @@ const socketService = require('../socket/socket_service');
 const tcpService = require('./tcp_service');
 require('dotenv').config();
 
+// Target IMEI for detailed logging
+const TARGET_IMEI = '352312094594994';
+
 class TCPListener {
     constructor() {
         this.server = null;
@@ -14,6 +17,9 @@ class TCPListener {
         this.server = net.createServer((socket) => {
             const connectionId = `${socket.remoteAddress}:${socket.remotePort}`;
             socketService.deviceMonitoringMessage('connected', null, null, null);
+            
+            // Log connection for target IMEI (will be identified later when IMEI is received)
+            console.log(`[IMEI: ${TARGET_IMEI}] New TCP connection established - ConnectionId: ${connectionId}, IP: ${socket.remoteAddress}:${socket.remotePort}, Timestamp: ${new Date().toISOString()}`);
 
             // Store connection info
             const connectionData = {
@@ -39,6 +45,12 @@ class TCPListener {
                 // Update last activity time
                 connectionData.lastActivityAt = new Date();
                 
+                // Log data received for target IMEI
+                if (socket.deviceImei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] 📥 Data received - Size: ${data.length} bytes, Hex: ${data.toString('hex')}, Timestamp: ${new Date().toISOString()}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Data buffer preview (first 50 bytes):`, data.slice(0, 50).toString('hex'));
+                }
+                
                 // Data handling
                 let datahandler = new tcpHandler.DataHandler();
                 datahandler.handleData(data, socket);
@@ -48,6 +60,11 @@ class TCPListener {
                     connectionData.deviceImei = socket.deviceImei;
                     tcpService.storeConnection(connectionId, connectionData);
                     
+                    // Log IMEI identification for target device
+                    if (socket.deviceImei === TARGET_IMEI) {
+                        console.log(`[IMEI: ${TARGET_IMEI}] ✅ Device IMEI identified - ConnectionId: ${connectionId}, ConnectedAt: ${connectionData.connectedAt.toISOString()}`);
+                    }
+                    
                     // Process any queued commands when device connects/identifies
                     tcpService.processQueuedCommands(socket.deviceImei);
                 }
@@ -55,6 +72,10 @@ class TCPListener {
 
             // Handle connection close
             socket.on('close', () => {
+                if (connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] 🔌 Connection closed - ConnectionId: ${connectionId}, Timestamp: ${new Date().toISOString()}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Connection duration: ${new Date() - connectionData.connectedAt}ms`);
+                }
                 socketService.deviceMonitoringMessage('disconnected', null, null, null);
                 this.connections.delete(connectionId);
                 tcpService.removeConnection(connectionId);
@@ -69,6 +90,12 @@ class TCPListener {
                 if (err.code === 'ETIMEDOUT') {
                     console.log(`[Worker ${process.pid}] Connection timeout for device ${socket.deviceImei || 'Unknown'}`);
                 }
+                
+                // Log errors for target IMEI
+                if (connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Connection error - Error: ${err.message}, Code: ${err.code}, ConnectionId: ${connectionId}, Timestamp: ${new Date().toISOString()}`);
+                }
+                
                 socketService.deviceMonitoringMessage('disconnected', null, null, null);
                 console.error(`${new Date().toISOString()} => CLIENT ERROR =>`, err.message);
                 this.connections.delete(connectionId);
@@ -86,6 +113,11 @@ class TCPListener {
             socket.on('timeout', () => {
                 const deviceInfo = socket.deviceImei ? `device ${socket.deviceImei}` : 'unknown device';
                 console.log(`[Worker ${process.pid}] Socket idle timeout for ${connectionId} (${deviceInfo}), but keeping connection alive`);
+                
+                // Log timeout for target IMEI
+                if (connectionData.deviceImei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] ⏱️ Socket idle timeout - ConnectionId: ${connectionId}, LastActivity: ${connectionData.lastActivityAt.toISOString()}, Keeping connection alive`);
+                }
                 
                 // Reset timeout again to keep connection alive
                 socket.setTimeout(timeoutMs);
