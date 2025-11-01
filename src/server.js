@@ -71,26 +71,37 @@ app.post('/api/alert-notification', (req, res) => {
 app.post('/api/tcp/send-command', async (req, res) => {
     try {
         const { imei, commandType, params } = req.body;
+        
+        console.log(`[TCP API] Received command request - IMEI: ${imei}, CommandType: ${commandType}, Params:`, params, `Timestamp: ${new Date().toISOString()}`);
+        console.log(`[TCP API] Request from IP: ${req.ip || req.connection.remoteAddress}`);
 
         if (!imei || !commandType) {
+            console.warn(`[TCP API] ❌ Missing required parameters - IMEI: ${imei}, CommandType: ${commandType}`);
             return res.status(400).json({
                 success: false,
                 message: 'IMEI and commandType are required'
             });
         }
 
+        console.log(`[TCP API] Calling tcpService.sendCommand for device ${imei}`);
         const result = await tcpService.sendCommand(imei, commandType, params || {});
+        
+        console.log(`[TCP API] Command result - Success: ${result.success}, Queued: ${result.queued || false}, Error: ${result.error || 'None'}`);
 
         if (result.success) {
+            const message = result.queued 
+                ? 'Command queued - will be sent when device connects'
+                : 'Command sent successfully';
+            console.log(`[TCP API] ✅ Command processed successfully for device ${imei} - ${message}`);
+            
             return res.json({
                 success: true,
-                message: result.queued 
-                    ? 'Command queued - will be sent when device connects'
-                    : 'Command sent successfully',
+                message: message,
                 queued: result.queued || false,
                 commandType: commandType
             });
         } else {
+            console.error(`[TCP API] ❌ Command failed for device ${imei}: ${result.error || 'Unknown error'}`);
             return res.status(500).json({
                 success: false,
                 message: result.error || 'Failed to send command'
@@ -98,7 +109,8 @@ app.post('/api/tcp/send-command', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in send-command endpoint:', error);
+        console.error(`[TCP API] ❌ Unexpected error in send-command endpoint:`, error);
+        console.error(`[TCP API] Error stack:`, error.stack);
         return res.status(500).json({
             success: false,
             message: 'Internal server error',

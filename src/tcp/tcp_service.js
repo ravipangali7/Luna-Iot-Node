@@ -47,13 +47,16 @@ class TCPService {
     // Send relay command to device (with auto-queue if offline)
     async sendRelayCommand(imei, command) {
         try {
+            console.log(`[RELAY COMMAND] Starting relay command - IMEI: ${imei}, Command: ${command}, Timestamp: ${new Date().toISOString()}`);
+            
             const connection = this.findConnectionByImei(imei);
             
             // Check if device is connected and socket is valid
             if (!connection || !connection.socket || connection.socket.destroyed) {
                 // Device not connected - queue the command
+                console.log(`[RELAY COMMAND] Device ${imei} not connected - queuing command ${command}`);
                 this.queueCommand(imei, 'RELAY', command);
-                console.log(`Device ${imei} not connected, relay command ${command} queued`);
+                console.log(`[RELAY COMMAND] Relay command ${command} queued for device ${imei}`);
                 return { 
                     success: true, 
                     command: command, 
@@ -62,12 +65,16 @@ class TCPService {
                 };
             }
 
+            console.log(`[RELAY COMMAND] Device ${imei} is connected - preparing to send command ${command}`);
+
             // Build relay command based on your GT06 protocol
             let relayCommand;
             if (command === 'ON') {
                 relayCommand = Buffer.from('HFYD#\n'); // Your ON command
+                console.log(`[RELAY COMMAND] Built relay ON command buffer: HFYD#\\n`);
             } else if (command === 'OFF') {
                 relayCommand = Buffer.from('DYD#\n');  // Your OFF command
+                console.log(`[RELAY COMMAND] Built relay OFF command buffer: DYD#\\n`);
             } else {
                 throw new Error(`Invalid relay command: ${command}`);
             }
@@ -75,12 +82,12 @@ class TCPService {
             // Send command to device
             connection.socket.write(relayCommand);
             
-            console.log(`Relay command sent to device ${imei}: ${command}`);
+            console.log(`[RELAY COMMAND] ✅ Relay command ${command} sent successfully to device ${imei} via TCP`);
             
             return { success: true, command: command, queued: false };
             
         } catch (error) {
-            console.error(`Error sending relay command to device ${imei}:`, error);
+            console.error(`[RELAY COMMAND] ❌ Error sending relay command to device ${imei}:`, error);
             return { success: false, error: error.message };
         }
     }
@@ -88,13 +95,20 @@ class TCPService {
     // Generic command sender - supports multiple command types
     async sendCommand(imei, commandType, params = {}) {
         try {
+            console.log(`[TCP COMMAND] Received command request - IMEI: ${imei}, CommandType: ${commandType}, Params:`, params, `Timestamp: ${new Date().toISOString()}`);
+            
             const connection = this.findConnectionByImei(imei);
             
             // Check if device is connected and socket is valid
             if (!connection || !connection.socket || connection.socket.destroyed) {
                 // Device not connected - queue the command
+                console.log(`[TCP COMMAND] Device ${imei} not connected - checking connection status`);
+                const isConnected = this.isDeviceConnected(imei);
+                console.log(`[TCP COMMAND] Device ${imei} connection status: ${isConnected}`);
+                
                 this.queueCommand(imei, commandType, params);
-                console.log(`Device ${imei} not connected, command ${commandType} queued`);
+                console.log(`[TCP COMMAND] Command ${commandType} queued for device ${imei}`);
+                
                 return { 
                     success: true, 
                     commandType: commandType,
@@ -103,21 +117,26 @@ class TCPService {
                 };
             }
 
+            console.log(`[TCP COMMAND] Device ${imei} is connected - preparing to send command ${commandType}`);
+
             // Get command buffer based on type
             const commandBuffer = this.getCommandBuffer(commandType, params);
             if (!commandBuffer) {
+                console.error(`[TCP COMMAND] ❌ Unknown or invalid command type: ${commandType} with params:`, params);
                 throw new Error(`Unknown command type: ${commandType}`);
             }
+            
+            console.log(`[TCP COMMAND] Built command buffer for ${commandType}:`, commandBuffer.toString('hex'));
             
             // Send command to device
             connection.socket.write(commandBuffer);
             
-            console.log(`Command ${commandType} sent to device ${imei}`);
+            console.log(`[TCP COMMAND] ✅ Command ${commandType} sent successfully to device ${imei} via TCP`);
             
             return { success: true, commandType: commandType, queued: false };
             
         } catch (error) {
-            console.error(`Error sending command ${commandType} to device ${imei}:`, error);
+            console.error(`[TCP COMMAND] ❌ Error sending command ${commandType} to device ${imei}:`, error);
             return { success: false, error: error.message };
         }
     }
@@ -179,12 +198,13 @@ class TCPService {
     // Queue command for offline device
     queueCommand(imei, commandType, commandData, priority = 0) {
         if (!imei) {
-            console.error('Cannot queue command: IMEI is required');
+            console.error('[COMMAND QUEUE] ❌ Cannot queue command: IMEI is required');
             return false;
         }
 
         if (!this.commandQueue.has(imei)) {
             this.commandQueue.set(imei, []);
+            console.log(`[COMMAND QUEUE] Created new queue for device ${imei}`);
         }
 
         const command = {
@@ -195,7 +215,8 @@ class TCPService {
         };
 
         this.commandQueue.get(imei).push(command);
-        console.log(`Command ${commandType} queued for device ${imei} (queue size: ${this.commandQueue.get(imei).length})`);
+        const queueSize = this.commandQueue.get(imei).length;
+        console.log(`[COMMAND QUEUE] Command ${commandType} queued for device ${imei} - Queue size: ${queueSize}, Priority: ${priority}, Timestamp: ${command.timestamp.toISOString()}`);
         
         return true;
     }
@@ -203,39 +224,46 @@ class TCPService {
     // Process all queued commands for a device
     async processQueuedCommands(imei) {
         if (!imei || !this.commandQueue.has(imei)) {
+            console.log(`[QUEUE PROCESS] No queued commands for device ${imei}`);
             return { processed: 0, failed: 0 };
         }
 
         const connection = this.findConnectionByImei(imei);
         if (!connection || !connection.socket || connection.socket.destroyed) {
-            console.log(`Cannot process queued commands for ${imei}: device not connected`);
+            console.log(`[QUEUE PROCESS] Cannot process queued commands for ${imei}: device not connected`);
             return { processed: 0, failed: 0 };
         }
 
         const commands = this.commandQueue.get(imei);
         if (!commands || commands.length === 0) {
+            console.log(`[QUEUE PROCESS] Command queue is empty for device ${imei}`);
             return { processed: 0, failed: 0 };
         }
 
+        console.log(`[QUEUE PROCESS] Processing ${commands.length} queued commands for device ${imei} - Timestamp: ${new Date().toISOString()}`);
+
         // Sort by priority (higher priority first)
         commands.sort((a, b) => b.priority - a.priority);
+        console.log(`[QUEUE PROCESS] Commands sorted by priority for device ${imei}`);
 
         let processed = 0;
         let failed = 0;
 
         for (const cmd of commands) {
             try {
+                console.log(`[QUEUE PROCESS] Processing queued command - Type: ${cmd.commandType}, Data:`, cmd.commandData, `Timestamp: ${cmd.timestamp.toISOString()}`);
+                
                 const commandBuffer = this.getCommandBuffer(cmd.commandType, cmd.commandData);
                 if (commandBuffer) {
                     connection.socket.write(commandBuffer);
                     processed++;
-                    console.log(`Queued command ${cmd.commandType} sent to device ${imei}`);
+                    console.log(`[QUEUE PROCESS] ✅ Queued command ${cmd.commandType} sent to device ${imei} via TCP`);
                 } else {
-                    console.warn(`Invalid command type ${cmd.commandType} for device ${imei}, skipping`);
+                    console.warn(`[QUEUE PROCESS] ⚠️ Invalid command type ${cmd.commandType} for device ${imei}, skipping`);
                     failed++;
                 }
             } catch (error) {
-                console.error(`Error processing queued command ${cmd.commandType} for device ${imei}:`, error);
+                console.error(`[QUEUE PROCESS] ❌ Error processing queued command ${cmd.commandType} for device ${imei}:`, error);
                 failed++;
             }
         }
@@ -243,7 +271,7 @@ class TCPService {
         // Clear processed commands
         this.clearQueuedCommands(imei);
 
-        console.log(`Processed ${processed} queued commands for device ${imei} (${failed} failed)`);
+        console.log(`[QUEUE PROCESS] ✅ Completed processing queued commands for device ${imei} - Processed: ${processed}, Failed: ${failed}`);
         return { processed, failed };
     }
 
