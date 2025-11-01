@@ -29,13 +29,25 @@ This document describes what packets/data the server sends to devices via TCP co
 
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
-**Packet Format:**
-- ASCII: `HFYD#`
-- Hex: `0x48 0x46 0x59 0x44 0x23`
-- Bytes: `48 46 59 44 23`
-- Length: 5 bytes
+**Packet Format (GT06 Protocol Section 6.1):**
+- **Full GT06 Protocol Packet Structure:**
+  - Start Bit: `0x78 0x78` (2 bytes)
+  - Packet Length: 1 byte (from Protocol Number to Stop Bit)
+  - Protocol Number: `0x80` (1 byte, server command)
+  - Information Content:
+    - Command Length: 1 byte (Server Flag Bit 4 + Command Content length)
+    - Server Flag Bit: `0x00 0x00 0x00 0x00` (4 bytes)
+    - Command Content: `HFYD#` (ASCII, 5 bytes)
+    - Language: `0x00 0x02` (2 bytes, English) or `0x00 0x01` (Chinese)
+    - Information Serial Number: 2 bytes
+  - Error Check: 2 bytes (XOR checksum)
+  - Stop Bit: `0x0D 0x0A` (2 bytes)
 
-**Purpose:** Connect/Restore vehicle oil-electric control circuit
+**Command Content (ASCII):** `HFYD#`
+- Hex: `0x48 0x46 0x59 0x44 0x23`
+- Purpose: Connect/Restore vehicle oil-electric control circuit
+
+**Total Packet Length:** ~18-20 bytes (depends on serial number)
 
 **When Sent:** When server receives relay ON command request for the device
 
@@ -43,11 +55,11 @@ This document describes what packets/data the server sends to devices via TCP co
 - Success: `HFYD=Success!`
 - Failure: `HFYD=Fail!`
 
-**For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
+**For IMEI `352312094594994`:** Logged with full GT06 packet hex, ASCII, and byte array format
 
 **Important:** 
-- No newline character (`\n`) - device expects exact format `HFYD#`
-- Official GT06 protocol format (section 6.5 of GT06 documentation)
+- Command is wrapped in full GT06 protocol packet according to section 6.1
+- Official GT06 protocol format (section 6.5 for command content, section 6.1 for packet structure)
 
 ---
 
@@ -55,13 +67,25 @@ This document describes what packets/data the server sends to devices via TCP co
 
 **Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
-**Packet Format:**
-- ASCII: `DYD#`
-- Hex: `0x44 0x59 0x44 0x23`
-- Bytes: `44 59 44 23`
-- Length: 4 bytes
+**Packet Format (GT06 Protocol Section 6.1):**
+- **Full GT06 Protocol Packet Structure:**
+  - Start Bit: `0x78 0x78` (2 bytes)
+  - Packet Length: 1 byte (from Protocol Number to Stop Bit)
+  - Protocol Number: `0x80` (1 byte, server command)
+  - Information Content:
+    - Command Length: 1 byte (Server Flag Bit 4 + Command Content length)
+    - Server Flag Bit: `0x00 0x00 0x00 0x00` (4 bytes)
+    - Command Content: `DYD#` (ASCII, 4 bytes)
+    - Language: `0x00 0x02` (2 bytes, English) or `0x00 0x01` (Chinese)
+    - Information Serial Number: 2 bytes
+  - Error Check: 2 bytes (XOR checksum)
+  - Stop Bit: `0x0D 0x0A` (2 bytes)
 
-**Purpose:** Cut off vehicle oil-electric control circuit
+**Command Content (ASCII):** `DYD#`
+- Hex: `0x44 0x59 0x44 0x23`
+- Purpose: Cut off vehicle oil-electric control circuit
+
+**Total Packet Length:** ~17-19 bytes (depends on serial number)
 
 **When Sent:** When server receives relay OFF command request for the device
 
@@ -69,12 +93,12 @@ This document describes what packets/data the server sends to devices via TCP co
 - Success: `DYD=Success!`
 - Failure: `DYD=Unvalued Fix` or `DYD=Speed Limit, Speed XXkm/h`
 
-**For IMEI `352312094594994`:** Logged with hex, ASCII, and byte array format
+**For IMEI `352312094594994`:** Logged with full GT06 packet hex, ASCII, and byte array format
 
 **Important:**
-- No newline character (`\n`) - device expects exact format `DYD#`
+- Command is wrapped in full GT06 protocol packet according to section 6.1
 - GT06 device requires: GPS fix must be valid AND vehicle speed < 20 km/h
-- Official GT06 protocol format (section 6.4 of GT06 documentation)
+- Official GT06 protocol format (section 6.4 for command content, section 6.1 for packet structure)
 - Oil/electricity cannot be disconnected when GPS tracking is off or speed > 20 km/h
 
 ---
@@ -115,13 +139,15 @@ This document describes what packets/data the server sends to devices via TCP co
 
 ## Summary Table
 
-| Command Type | Packet (ASCII) | Hex Format | Length | Purpose |
-|--------------|----------------|------------|--------|---------|
+| Command Type | Command Content (ASCII) | Full Packet Format | Length | Purpose |
+|--------------|------------------------|---------------------|--------|---------|
 | GT06 ACK | Auto-generated | `78780501...0d0a` | Variable | Acknowledge device data |
-| Relay ON | `HFYD#` | `48 46 59 44 23` | 5 bytes | Connect/Restore oil-electricity |
-| Relay OFF | `DYD#` | `44 59 44 23` | 4 bytes | Cut off oil-electricity |
-| RESET | `RESET#\n` | `52 45 53 45 54 23 0A` | 7 bytes | Reset device |
-| SERVER_POINT | `SERVER,IP:PORT#\n` | Variable | Variable | Configure server |
+| Relay ON | `HFYD#` | GT06 packet: `7878[length]80...HFYD#...0d0a` | ~18-20 bytes | Connect/Restore oil-electricity |
+| Relay OFF | `DYD#` | GT06 packet: `7878[length]80...DYD#...0d0a` | ~17-19 bytes | Cut off oil-electricity |
+| RESET | `RESET#` | GT06 packet: `7878[length]80...RESET#...0d0a` | Variable | Reset device |
+| SERVER_POINT | `SERVER,IP:PORT#` | GT06 packet: `7878[length]80...SERVER...0d0a` | Variable | Configure server |
+
+**Note:** Relay commands (ON/OFF), RESET, and SERVER_POINT are now wrapped in full GT06 protocol packets according to section 6.1, with proper headers, checksums, and stop bits.
 
 ---
 

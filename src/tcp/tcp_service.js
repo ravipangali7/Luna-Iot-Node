@@ -196,21 +196,17 @@ class TCPService {
                 };
             }
 
-            // Build relay command based on official GT06 protocol
+            // Build relay command using GT06 protocol packet builder
+            // This wraps the command (HFYD# or DYD#) in proper GT06 protocol packet format
             // Note: HFYD# = Connect/Restore oil-electricity (ON), DYD# = Cut off oil-electricity (OFF)
-            let relayCommand;
-            if (command === 'ON') {
-                relayCommand = Buffer.from('HFYD#'); // GT06: Connect/Restore oil and electricity
-                if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay ON command buffer: HFYD#`);
-                }
-            } else if (command === 'OFF') {
-                relayCommand = Buffer.from('DYD#');  // GT06: Cut off oil and electricity
-                if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay OFF command buffer: DYD#`);
-                }
-            } else {
+            const relayCommand = this.getCommandBuffer('RELAY', { command: command });
+            if (!relayCommand) {
                 throw new Error(`Invalid relay command: ${command}`);
+            }
+            
+            if (imei === TARGET_IMEI) {
+                console.log(`[IMEI: ${TARGET_IMEI}] Built relay ${command} command - GT06 packet length: ${relayCommand.length} bytes`);
+                console.log(`[IMEI: ${TARGET_IMEI}] GT06 packet hex: ${relayCommand.toString('hex')}`);
             }
             
             // Send command to device with error handling and callback
@@ -219,20 +215,35 @@ class TCPService {
                 connection.socket.setNoDelay(true);
                 
                 // Write with callback to confirm data was sent
-                connection.socket.write(relayCommand, (error) => {
+                const writeSuccess = connection.socket.write(relayCommand, (error) => {
                     if (error) {
+                        if (imei === TARGET_IMEI) {
+                            console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error:`, error);
+                        }
                         // Queue command if write fails
                         this.queueCommand(imei, 'RELAY', command);
+                    } else {
+                        if (imei === TARGET_IMEI) {
+                            console.log(`[IMEI: ${TARGET_IMEI}] ✅ Command RELAY confirmed sent to socket`);
+                        }
                     }
                 });
                 
-                // Minimal send log - only for target IMEI
+                if (!writeSuccess) {
+                    // Socket buffer is full, data was queued internally
+                    if (imei === TARGET_IMEI) {
+                        console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket buffer full, command queued in socket buffer`);
+                    }
+                }
+                
+                // Target IMEI specific logging with packet details
                 if (imei === TARGET_IMEI) {
-                    console.log(`[RELAY] Sent: ${command}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING COMMAND - Type: RELAY, Command: ${command}, Packet Hex: ${relayCommand.toString('hex')}, Length: ${relayCommand.length} bytes, Writable: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Command packet bytes:`, Array.from(relayCommand).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
                 }
             } catch (writeError) {
                 if (imei === TARGET_IMEI) {
-                    console.log(`[RELAY] Send error`);
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error writing to socket:`, writeError);
                 }
                 throw writeError;
             }
@@ -403,13 +414,95 @@ class TCPService {
     //    Purpose: Configure server IP and port on device
     //    Location: tcp_service.js getCommandBuffer() method
     //
+    // Build GT06 protocol command packet according to section 6.1 of GT06 documentation
+    // Packet structure: Start(2) + Length(1) + Protocol(1) + InfoContent + Check(2) + Stop(2)
+    // InfoContent: CmdLen(1) + ServerFlag(4) + Command(ASCII) + Language(2) + Serial(2)
+    buildGT06CommandPacket(commandText, language = 0x0002, serialNumber = 0x0001) {
+        // Start Bit: 0x78 0x78
+        const startBit = Buffer.from([0x78, 0x78]);
+        
+        // Protocol Number: 0x80 (server command)
+        const protocolNumber = Buffer.from([0x80]);
+        
+        // Server Flag Bit: 4 bytes (0x00 0x00 0x00 0x00)
+        const serverFlagBit = Buffer.from([0x00, 0x00, 0x00, 0x00]);
+        
+        // Command Content: ASCII string
+        const commandContent = Buffer.from(commandText, 'ascii');
+        
+        // Length of Command: Server Flag Bit (4) + Command Content length
+        const commandLength = 4 + commandContent.length;
+        
+        // Language: 2 bytes (0x00 0x02 for English, 0x00 0x01 for Chinese)
+        const languageBytes = Buffer.from([
+            (language >> 8) & 0xFF,
+            language & 0xFF
+        ]);
+        
+        // Information Serial Number: 2 bytes
+        const serialBytes = Buffer.from([
+            (serialNumber >> 8) & 0xFF,
+            serialNumber & 0xFF
+        ]);
+        
+        // Build Information Content
+        const infoContent = Buffer.concat([
+            Buffer.from([commandLength]),
+            serverFlagBit,
+            commandContent,
+            languageBytes,
+            serialBytes
+        ]);
+        
+        // Calculate checksum: XOR of all bytes from Protocol Number to Information Serial Number
+        // GT06 checksum is 16-bit, calculated as XOR of each byte pair
+        const checksumData = Buffer.concat([protocolNumber, infoContent]);
+        let checksum = 0;
+        for (let i = 0; i < checksumData.length; i++) {
+            checksum ^= checksumData[i];
+        }
+        // Checksum is stored as 2 bytes (high byte, low byte)
+        // For single byte XOR, high byte is typically 0x00
+        const checksumBytes = Buffer.from([
+            (checksum >> 8) & 0xFF,
+            checksum & 0xFF
+        ]);
+        
+        // Calculate Packet Length: from Protocol Number to Stop Bit
+        // Protocol(1) + InfoContent + Check(2) + Stop(2)
+        const packetLength = 1 + infoContent.length + 2 + 2;
+        
+        // Stop Bit: 0x0D 0x0A
+        const stopBit = Buffer.from([0x0D, 0x0A]);
+        
+        // Build complete packet
+        const packet = Buffer.concat([
+            startBit,
+            Buffer.from([packetLength]),
+            protocolNumber,
+            infoContent,
+            checksumBytes,
+            stopBit
+        ]);
+        
+        return packet;
+    }
+
     // Map command types to GT06 protocol buffers
+    // Now returns proper GT06 protocol packets wrapped according to section 6.1
     getCommandBuffer(commandType, params = {}) {
+        // Get serial number from params or use default
+        const serialNumber = params.serialNumber || 0x0001;
+        // Get language from params or use English as default
+        const language = params.language || 0x0002;
+        
         switch (commandType) {
             case 'RELAY_ON':
-                return Buffer.from('HFYD#'); // GT06: Connect/Restore oil-electricity
+                // Wrap HFYD# command in GT06 protocol packet
+                return this.buildGT06CommandPacket('HFYD#', language, serialNumber);
             case 'RELAY_OFF':
-                return Buffer.from('DYD#'); // GT06: Cut off oil-electricity
+                // Wrap DYD# command in GT06 protocol packet
+                return this.buildGT06CommandPacket('DYD#', language, serialNumber);
             case 'RELAY':
                 // RELAY command with params: 'ON', 'OFF', or {command: 'ON'/'OFF'}
                 let relayCommand = '';
@@ -425,19 +518,20 @@ class TCPService {
                 relayCommand = relayCommand.toString().trim().toUpperCase();
                 
                 if (relayCommand === 'ON') {
-                    return Buffer.from('HFYD#'); // GT06: Connect/Restore oil-electricity
+                    return this.buildGT06CommandPacket('HFYD#', language, serialNumber);
                 } else if (relayCommand === 'OFF') {
-                    return Buffer.from('DYD#'); // GT06: Cut off oil-electricity
+                    return this.buildGT06CommandPacket('DYD#', language, serialNumber);
                 }
                 // Log for debugging (will be filtered by TARGET_IMEI check in processQueuedCommands)
                 return null;
             case 'RESET':
-                return Buffer.from('RESET#\n'); // Verify actual GT06 reset command
+                // Wrap RESET command in GT06 protocol packet
+                return this.buildGT06CommandPacket('RESET#', language, serialNumber);
             case 'SERVER_POINT':
                 // GT06 server point command - format may vary
-                // Example: Buffer.from('SERVER,IP:PORT#\n')
+                // Example: SERVER,IP:PORT#
                 if (params.ip && params.port) {
-                    return Buffer.from(`SERVER,${params.ip}:${params.port}#\n`);
+                    return this.buildGT06CommandPacket(`SERVER,${params.ip}:${params.port}#`, language, serialNumber);
                 }
                 return null;
             default:
