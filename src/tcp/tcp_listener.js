@@ -46,6 +46,24 @@ class TCPListener {
                 if (socket.deviceImei === TARGET_IMEI) {
                     console.log(`[IMEI: ${TARGET_IMEI}] 📥 Data received - Size: ${data.length} bytes, Hex: ${data.toString('hex')}, Timestamp: ${new Date().toISOString()}`);
                     console.log(`[IMEI: ${TARGET_IMEI}] Data buffer preview (first 50 bytes):`, data.slice(0, 50).toString('hex'));
+                    
+                    // Try to detect ASCII text responses (device responses to commands)
+                    try {
+                        const asciiText = data.toString('ascii');
+                        console.log(`[IMEI: ${TARGET_IMEI}] Data ASCII preview: ${asciiText.substring(0, 100)}`);
+                        
+                        // Check for device response patterns
+                        if (asciiText.includes('HFYD=') || asciiText.includes('DYD=')) {
+                            console.log(`[IMEI: ${TARGET_IMEI}] 🔔 Possible device response detected in ASCII: ${asciiText}`);
+                        }
+                    } catch (e) {
+                        // Not ASCII, that's fine
+                    }
+                }
+                
+                // Check for device responses before GT06 parsing
+                if (socket.deviceImei === TARGET_IMEI) {
+                    tcpService.detectDeviceResponse(data, socket.deviceImei);
                 }
                 
                 // Data handling

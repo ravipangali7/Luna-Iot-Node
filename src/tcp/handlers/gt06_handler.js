@@ -12,12 +12,40 @@ const TARGET_IMEI = '352312094594994';
 class GT06Handler {
 
     constructor(data, socket) {
+        // Check for ASCII text device responses BEFORE parsing as GT06 protocol
+        // Device responses like "HFYD=Success!" or "DYD=Success!" come as plain ASCII text
+        if (socket.deviceImei === TARGET_IMEI) {
+            try {
+                // Check if this might be ASCII text response (not GT06 protocol)
+                const firstBytes = data.slice(0, 2);
+                const isGT06Protocol = firstBytes.length === 2 && firstBytes[0] === 0x78 && firstBytes[1] === 0x78;
+                
+                if (!isGT06Protocol) {
+                    // Try ASCII conversion
+                    const asciiText = data.toString('ascii');
+                    
+                    // Log all ASCII text for target IMEI to catch device responses
+                    console.log(`[GT06 HANDLER] 📨 Incoming data for ${TARGET_IMEI} - ASCII: ${asciiText}, Hex: ${data.toString('hex')}, Length: ${data.length}`);
+                    
+                    // Check for device response patterns
+                    if (asciiText.includes('HFYD=') || asciiText.includes('DYD=')) {
+                        console.log(`[GT06 HANDLER] 🔔 DEVICE RESPONSE DETECTED for ${TARGET_IMEI}: ${asciiText}`);
+                    }
+                }
+            } catch (e) {
+                // Not ASCII or parsing failed, continue with GT06 parsing
+            }
+        }
+        
         var gt06 = new Gt06();
 
         try {
             gt06.parse(data);
         } catch (e) {
-            // console.log('Error while parsing gt06 data: ', e);
+            // Log parse error for target IMEI - might indicate ASCII response instead of GT06
+            if (socket.deviceImei === TARGET_IMEI) {
+                console.log(`[GT06 HANDLER] ⚠️ GT06 parse failed for ${TARGET_IMEI} - Data might be ASCII response. Hex: ${data.toString('hex')}, ASCII: ${data.toString('ascii')}`);
+            }
             return;
         }
 

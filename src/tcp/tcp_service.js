@@ -751,6 +751,63 @@ class TCPService {
     getDeviceCount() {
         return this.deviceImeiMap.size;
     }
+
+    // Detect and log device responses to relay commands
+    // Device responses come as ASCII text: HFYD=Success!, DYD=Success!, etc.
+    detectDeviceResponse(data, imei) {
+        if (!imei || imei !== TARGET_IMEI) {
+            return false;
+        }
+
+        // Try to convert data to ASCII string
+        let asciiText = '';
+        try {
+            // Check if data is ASCII text (not binary GT06 protocol)
+            // GT06 protocol starts with 0x78 0x78, so if first bytes are not that, might be ASCII
+            const firstBytes = data.slice(0, 2);
+            const isGT06Protocol = firstBytes.length === 2 && firstBytes[0] === 0x78 && firstBytes[1] === 0x78;
+            
+            if (!isGT06Protocol) {
+                // Try to convert to ASCII
+                asciiText = data.toString('ascii');
+                
+                // Check for device response patterns
+                if (asciiText.includes('HFYD=') || asciiText.includes('DYD=')) {
+                    console.log(`[DEVICE RESPONSE] 📥 Device response detected for IMEI ${imei}:`);
+                    console.log(`[DEVICE RESPONSE] ASCII: ${asciiText}`);
+                    console.log(`[DEVICE RESPONSE] Hex: ${data.toString('hex')}`);
+                    console.log(`[DEVICE RESPONSE] Length: ${data.length} bytes`);
+                    console.log(`[DEVICE RESPONSE] Timestamp: ${new Date().toISOString()}`);
+                    
+                    // Parse specific responses
+                    if (asciiText.includes('HFYD=Success!')) {
+                        console.log(`[DEVICE RESPONSE] ✅ Relay ON command SUCCESSFUL - Oil/electricity connected`);
+                    } else if (asciiText.includes('HFYD=Fail!')) {
+                        console.log(`[DEVICE RESPONSE] ❌ Relay ON command FAILED - Oil/electricity not connected`);
+                    } else if (asciiText.includes('DYD=Success!')) {
+                        console.log(`[DEVICE RESPONSE] ✅ Relay OFF command SUCCESSFUL - Oil/electricity cut off`);
+                    } else if (asciiText.includes('DYD=Unvalued Fix')) {
+                        console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - GPS fix not valid (Unvalued Fix)`);
+                    } else if (asciiText.includes('DYD=Speed Limit')) {
+                        const speedMatch = asciiText.match(/Speed Limit, Speed (\d+)km\/h/);
+                        if (speedMatch) {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high: ${speedMatch[1]} km/h (must be < 20 km/h)`);
+                        } else {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high (must be < 20 km/h)`);
+                        }
+                    } else {
+                        console.log(`[DEVICE RESPONSE] ⚠️ Unknown response format: ${asciiText}`);
+                    }
+                    
+                    return true;
+                }
+            }
+        } catch (e) {
+            // Not ASCII text, ignore
+        }
+        
+        return false;
+    }
 }
 
 module.exports = new TCPService();
