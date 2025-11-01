@@ -16,20 +16,26 @@ class TCPService {
 
     // Store connection with device info
     storeConnection(connectionId, connectionData) {
+        // Normalize deviceImei to string for consistent storage
+        if (connectionData.deviceImei) {
+            connectionData.deviceImei = String(connectionData.deviceImei);
+        }
+        
         this.connections.set(connectionId, connectionData);
         
         // If device IMEI is available, map it immediately
         // This ensures commands can be sent instantly after device identifies itself
         if (connectionData.deviceImei) {
-            const existingConnectionId = this.deviceImeiMap.get(connectionData.deviceImei);
+            const imeiStr = String(connectionData.deviceImei);
+            const existingConnectionId = this.deviceImeiMap.get(imeiStr);
             
             // If IMEI is already mapped, check if we should update to this connection
             if (existingConnectionId) {
                 const existingConnection = this.connections.get(existingConnectionId);
                 // Update map if existing connection is invalid or this connection is more recent
                 if (!existingConnection || !existingConnection.socket || existingConnection.socket.destroyed) {
-                    this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
-                    if (connectionData.deviceImei === TARGET_IMEI) {
+                    this.deviceImeiMap.set(imeiStr, connectionId);
+                    if (imeiStr === TARGET_IMEI) {
                         console.log(`[IMEI: ${TARGET_IMEI}] Updated IMEI map - Old connection invalid, using new connectionId: ${connectionId}`);
                     }
                 } else {
@@ -37,16 +43,16 @@ class TCPService {
                     const existingTime = existingConnection.lastActivityAt?.getTime() || existingConnection.connectedAt?.getTime() || 0;
                     const newTime = connectionData.lastActivityAt?.getTime() || connectionData.connectedAt?.getTime() || 0;
                     if (newTime > existingTime) {
-                        this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
-                        if (connectionData.deviceImei === TARGET_IMEI) {
+                        this.deviceImeiMap.set(imeiStr, connectionId);
+                        if (imeiStr === TARGET_IMEI) {
                             console.log(`[IMEI: ${TARGET_IMEI}] Updated IMEI map - New connection more recent, connectionId: ${connectionId}`);
                         }
                     }
                 }
             } else {
                 // First time mapping this IMEI
-                this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
-                if (connectionData.deviceImei === TARGET_IMEI) {
+                this.deviceImeiMap.set(imeiStr, connectionId);
+                if (imeiStr === TARGET_IMEI) {
                     console.log(`[IMEI: ${TARGET_IMEI}] IMEI mapped immediately - connectionId: ${connectionId}, ready for commands`);
                 }
             }
@@ -57,23 +63,40 @@ class TCPService {
     removeConnection(connectionId) {
         const connectionData = this.connections.get(connectionId);
         if (connectionData && connectionData.deviceImei) {
-            this.deviceImeiMap.delete(connectionData.deviceImei);
+            // Normalize IMEI to string for consistent deletion
+            const imeiStr = String(connectionData.deviceImei);
+            this.deviceImeiMap.delete(imeiStr);
         }
         this.connections.delete(connectionId);
     }
 
     // Find connection by IMEI with fallback and verification
     findConnectionByImei(imei) {
+        // Normalize IMEI to string for consistent lookup
+        const imeiStr = imei ? String(imei) : null;
+        
+        if (!imeiStr) {
+            return null;
+        }
+        
+        // Diagnostic log for target IMEI
+        if (imeiStr === TARGET_IMEI) {
+            console.log(`[FIND] Searching for IMEI - Input: ${imei} (type: ${typeof imei}), Normalized: ${imeiStr}`);
+        }
+        
         // First try: Use IMEI map (fast lookup)
-        const connectionId = this.deviceImeiMap.get(imei);
+        const connectionId = this.deviceImeiMap.get(imeiStr);
         if (connectionId) {
             const connection = this.connections.get(connectionId);
             // Verify connection is valid and socket is not destroyed
             if (connection && connection.socket && !connection.socket.destroyed && connection.socket.writable) {
+                if (imeiStr === TARGET_IMEI) {
+                    console.log(`[FIND] ✅ Found via IMEI map - connectionId: ${connectionId}`);
+                }
                 return connection;
             }
             // Map points to invalid connection, remove it
-            this.deviceImeiMap.delete(imei);
+            this.deviceImeiMap.delete(imeiStr);
         }
         
         // Fallback: Search all connections by IMEI (slower but reliable)
@@ -81,9 +104,18 @@ class TCPService {
         let foundConnection = null;
         let mostRecentConnection = null;
         let mostRecentTime = 0;
+        let sampleImeis = [];
         
         for (const [connId, connData] of this.connections.entries()) {
-            if (connData.deviceImei === imei) {
+            // Normalize stored IMEI for comparison
+            const storedImeiStr = connData.deviceImei ? String(connData.deviceImei) : null;
+            
+            // Collect sample IMEIs for diagnostics (only first 3)
+            if (imeiStr === TARGET_IMEI && sampleImeis.length < 3 && storedImeiStr) {
+                sampleImeis.push(`${storedImeiStr} (type: ${typeof connData.deviceImei})`);
+            }
+            
+            if (storedImeiStr === imeiStr) {
                 // Check if socket is valid and writable
                 if (connData.socket && !connData.socket.destroyed && connData.socket.writable) {
                     // Track most recent connection
@@ -103,16 +135,19 @@ class TCPService {
             const recentConnId = Array.from(this.connections.entries())
                 .find(([id, data]) => data === mostRecentConnection)?.[0];
             if (recentConnId) {
-                this.deviceImeiMap.set(imei, recentConnId);
+                this.deviceImeiMap.set(imeiStr, recentConnId);
+                if (imeiStr === TARGET_IMEI) {
+                    console.log(`[FIND] ✅ Found via fallback search - Updated map, connectionId: ${recentConnId}`);
+                }
             }
             return mostRecentConnection;
         }
         
         // Log for target IMEI if connection not found
-        if (imei === TARGET_IMEI) {
+        if (imeiStr === TARGET_IMEI) {
             const totalConnections = this.connections.size;
             const mappedConnections = Array.from(this.deviceImeiMap.keys()).length;
-            console.log(`[IMEI: ${TARGET_IMEI}] ⚠️ Connection not found - Total connections: ${totalConnections}, Mapped IMEIs: ${mappedConnections}`);
+            console.log(`[FIND] ❌ Connection not found - Total connections: ${totalConnections}, Mapped IMEIs: ${mappedConnections}, Sample IMEIs in connections: ${sampleImeis.join(', ') || 'none'}`);
         }
         
         return null;
