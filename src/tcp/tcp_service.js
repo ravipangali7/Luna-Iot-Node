@@ -196,17 +196,18 @@ class TCPService {
                 };
             }
 
-            // Build relay command based on GT06 protocol (RELAY,1# for ON, RELAY,0# for OFF)
+            // Build relay command based on official GT06 protocol
+            // Note: HFYD# = Connect/Restore oil-electricity (ON), DYD# = Cut off oil-electricity (OFF)
             let relayCommand;
             if (command === 'ON') {
-                relayCommand = Buffer.from('RELAY,1#'); // GT06 relay ON command (cut off oil/electricity)
+                relayCommand = Buffer.from('HFYD#'); // GT06: Connect/Restore oil and electricity
                 if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay ON command buffer: RELAY,1#`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay ON command buffer: HFYD#`);
                 }
             } else if (command === 'OFF') {
-                relayCommand = Buffer.from('RELAY,0#');  // GT06 relay OFF command (restore oil/electricity)
+                relayCommand = Buffer.from('DYD#');  // GT06: Cut off oil and electricity
                 if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay OFF command buffer: RELAY,0#`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay OFF command buffer: DYD#`);
                 }
             } else {
                 throw new Error(`Invalid relay command: ${command}`);
@@ -379,17 +380,18 @@ class TCPService {
     // SERVER COMMAND PACKETS SENT TO DEVICES
     // ========================================
     // 
-    // 2. RELAY ON COMMAND
-    //    Packet: 'RELAY,1#' (hex: 0x52 0x45 0x4C 0x41 0x59 0x2C 0x31 0x23)
-    //    Purpose: Turn relay ON - Cut off oil/electricity supply
+    // 2. RELAY ON COMMAND (Official GT06 Protocol)
+    //    Packet: 'HFYD#' (hex: 0x48 0x46 0x59 0x44 0x23)
+    //    Purpose: Connect/Restore oil and electricity supply
     //    Location: tcp_service.js sendRelayCommand() method and getCommandBuffer()
-    //    Note: GT06 requires GPS fix + speed < 20 km/h for command to execute
+    //    Device Response: Success -> 'HFYD=Success!', Fail -> 'HFYD=Fail!'
     //
-    // 3. RELAY OFF COMMAND  
-    //    Packet: 'RELAY,0#' (hex: 0x52 0x45 0x4C 0x41 0x59 0x2C 0x30 0x23)
-    //    Purpose: Turn relay OFF - Restore oil/electricity supply
+    // 3. RELAY OFF COMMAND (Official GT06 Protocol)
+    //    Packet: 'DYD#' (hex: 0x44 0x59 0x44 0x23)
+    //    Purpose: Cut off oil and electricity supply
     //    Location: tcp_service.js sendRelayCommand() method and getCommandBuffer()
-    //    Note: GT06 requires GPS fix + speed < 20 km/h for command to execute
+    //    Device Response: Success -> 'DYD=Success!', Fail -> 'DYD=Unvalued Fix' or 'DYD=Speed Limit, Speed XXkm/h'
+    //    Note: GT06 requires GPS fix + speed < 20 km/h for DYD# command to execute
     //
     // 4. RESET COMMAND
     //    Packet: 'RESET#\n' (hex: 0x52 0x45 0x53 0x45 0x54 0x23 0x0A)
@@ -405,9 +407,9 @@ class TCPService {
     getCommandBuffer(commandType, params = {}) {
         switch (commandType) {
             case 'RELAY_ON':
-                return Buffer.from('RELAY,1#');
+                return Buffer.from('HFYD#'); // GT06: Connect/Restore oil-electricity
             case 'RELAY_OFF':
-                return Buffer.from('RELAY,0#');
+                return Buffer.from('DYD#'); // GT06: Cut off oil-electricity
             case 'RELAY':
                 // RELAY command with params: 'ON', 'OFF', or {command: 'ON'/'OFF'}
                 let relayCommand = '';
@@ -423,9 +425,9 @@ class TCPService {
                 relayCommand = relayCommand.toString().trim().toUpperCase();
                 
                 if (relayCommand === 'ON') {
-                    return Buffer.from('RELAY,1#');
+                    return Buffer.from('HFYD#'); // GT06: Connect/Restore oil-electricity
                 } else if (relayCommand === 'OFF') {
-                    return Buffer.from('RELAY,0#');
+                    return Buffer.from('DYD#'); // GT06: Cut off oil-electricity
                 }
                 // Log for debugging (will be filtered by TARGET_IMEI check in processQueuedCommands)
                 return null;
