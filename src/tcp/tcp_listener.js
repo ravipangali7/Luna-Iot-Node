@@ -2,6 +2,7 @@ const net = require('net')
 const tcpHandler = require('./handlers/handler')
 const socketService = require('../socket/socket_service');
 const tcpService = require('./tcp_service');
+require('dotenv').config();
 
 class TCPListener {
     constructor() {
@@ -20,6 +21,7 @@ class TCPListener {
                 connectionId: connectionId,
                 workerId: process.pid,
                 connectedAt: new Date(),
+                lastActivityAt: new Date(),
                 remoteAddress: socket.remoteAddress,
                 remotePort: socket.remotePort,
                 deviceImei: null // Will be set when IMEI is received
@@ -30,6 +32,13 @@ class TCPListener {
 
             // Handle incoming data
             socket.on('data', async (data) => {
+                // Reset timeout on every data packet to keep connection alive
+                const timeoutMs = parseInt(process.env.TCP_CONNECTION_TIMEOUT) || 86400000; // 24 hours default
+                socket.setTimeout(timeoutMs);
+                
+                // Update last activity time
+                connectionData.lastActivityAt = new Date();
+                
                 // Data handling
                 let datahandler = new tcpHandler.DataHandler();
                 datahandler.handleData(data, socket);
@@ -38,6 +47,9 @@ class TCPListener {
                 if (socket.deviceImei) {
                     connectionData.deviceImei = socket.deviceImei;
                     tcpService.storeConnection(connectionId, connectionData);
+                    
+                    // Process any queued commands when device connects/identifies
+                    tcpService.processQueuedCommands(socket.deviceImei);
                 }
             });
 
@@ -58,21 +70,29 @@ class TCPListener {
                     console.log(`[Worker ${process.pid}] Connection timeout for device ${socket.deviceImei || 'Unknown'}`);
                 }
                 socketService.deviceMonitoringMessage('disconnected', null, null, null);
-                console.error(`${new Date().toISOString} => CLIENT ERROR =>`, err.message);
+                console.error(`${new Date().toISOString()} => CLIENT ERROR =>`, err.message);
                 this.connections.delete(connectionId);
                 tcpService.removeConnection(connectionId);
             });
 
             socket.setKeepAlive(true, 60000); // 60 seconds
-            socket.setTimeout(600000); // Increase to 10 minutes
+            
+            // Set timeout duration (default: 24 hours, configurable via TCP_CONNECTION_TIMEOUT env var)
+            const timeoutMs = parseInt(process.env.TCP_CONNECTION_TIMEOUT) || 86400000; // 24 hours = 86400000ms
+            socket.setTimeout(timeoutMs);
 
-            // Add timeout handler
+            // Timeout handler - log but keep connection alive (don't close)
+            // Connection will reset timeout on next data packet
             socket.on('timeout', () => {
-                socketService.deviceMonitoringMessage('disconnected', null, null, null);
-                console.log(`[Worker ${process.pid}] Socket timeout for ${connectionId}`);
-                this.connections.delete(connectionId);
-                tcpService.removeConnection(connectionId);
-                socket.end(); // Gracefully close the connection
+                const deviceInfo = socket.deviceImei ? `device ${socket.deviceImei}` : 'unknown device';
+                console.log(`[Worker ${process.pid}] Socket idle timeout for ${connectionId} (${deviceInfo}), but keeping connection alive`);
+                
+                // Reset timeout again to keep connection alive
+                socket.setTimeout(timeoutMs);
+                
+                // Note: We don't close the connection or remove it from maps
+                // This allows the connection to stay alive and receive commands
+                // Connection will only be removed on actual close/error events
             });
         });
 

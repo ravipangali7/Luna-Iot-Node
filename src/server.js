@@ -1,4 +1,5 @@
 const tcp = require('./tcp/tcp_listener');
+const tcpService = require('./tcp/tcp_service');
 const mysqlService = require('./database/mysql');
 const socketService = require('./socket/socket_service');
 const GT06NotificationService = require('./utils/gt06_notification_service');
@@ -57,6 +58,133 @@ app.post('/api/alert-notification', (req, res) => {
     } catch (error) {
         console.error('Error in alert notification endpoint:', error);
         res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// TCP Command API Endpoints
+
+// POST /api/tcp/send-command - Send command to device (with auto-queue if offline)
+app.post('/api/tcp/send-command', async (req, res) => {
+    try {
+        const { imei, commandType, params } = req.body;
+
+        if (!imei || !commandType) {
+            return res.status(400).json({
+                success: false,
+                message: 'IMEI and commandType are required'
+            });
+        }
+
+        const result = await tcpService.sendCommand(imei, commandType, params || {});
+
+        if (result.success) {
+            return res.json({
+                success: true,
+                message: result.queued 
+                    ? 'Command queued - will be sent when device connects'
+                    : 'Command sent successfully',
+                queued: result.queued || false,
+                commandType: commandType
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                message: result.error || 'Failed to send command'
+            });
+        }
+
+    } catch (error) {
+        console.error('Error in send-command endpoint:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/tcp/device-status/:imei - Get device connection status and queue info
+app.get('/api/tcp/device-status/:imei', (req, res) => {
+    try {
+        const { imei } = req.params;
+
+        if (!imei) {
+            return res.status(400).json({
+                success: false,
+                message: 'IMEI is required'
+            });
+        }
+
+        const status = tcpService.getDeviceStatus(imei);
+
+        return res.json({
+            success: true,
+            data: status
+        });
+
+    } catch (error) {
+        console.error('Error in device-status endpoint:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/tcp/queued-commands/:imei - Get queued commands for a device
+app.get('/api/tcp/queued-commands/:imei', (req, res) => {
+    try {
+        const { imei } = req.params;
+
+        if (!imei) {
+            return res.status(400).json({
+                success: false,
+                message: 'IMEI is required'
+            });
+        }
+
+        const commands = tcpService.getQueuedCommands(imei);
+        const count = tcpService.getQueuedCommandsCount(imei);
+
+        return res.json({
+            success: true,
+            data: {
+                commands: commands,
+                count: count
+            }
+        });
+
+    } catch (error) {
+        console.error('Error in queued-commands endpoint:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/tcp/connected-devices - Get list of all connected devices
+app.get('/api/tcp/connected-devices', (req, res) => {
+    try {
+        const devices = tcpService.getConnectedDevices();
+
+        return res.json({
+            success: true,
+            data: {
+                devices: devices,
+                count: devices.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Error in connected-devices endpoint:', error);
+        return res.status(500).json({
             success: false,
             message: 'Internal server error',
             error: error.message
