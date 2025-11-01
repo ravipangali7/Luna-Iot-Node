@@ -17,9 +17,6 @@ class TCPListener {
         this.server = net.createServer((socket) => {
             const connectionId = `${socket.remoteAddress}:${socket.remotePort}`;
             socketService.deviceMonitoringMessage('connected', null, null, null);
-            
-            // Log connection for target IMEI (will be identified later when IMEI is received)
-            console.log(`[IMEI: ${TARGET_IMEI}] New TCP connection established - ConnectionId: ${connectionId}, IP: ${socket.remoteAddress}:${socket.remotePort}, Timestamp: ${new Date().toISOString()}`);
 
             // Store connection info
             const connectionData = {
@@ -62,7 +59,7 @@ class TCPListener {
                     
                     // Log IMEI identification for target device
                     if (socket.deviceImei === TARGET_IMEI) {
-                        console.log(`[IMEI: ${TARGET_IMEI}] ✅ Device IMEI identified - ConnectionId: ${connectionId}, ConnectedAt: ${connectionData.connectedAt.toISOString()}`);
+                        console.log(`[IMEI: ${TARGET_IMEI}] ✅ Device IMEI identified - ConnectionId: ${connectionId}, IP: ${socket.remoteAddress}:${socket.remotePort}, ConnectedAt: ${connectionData.connectedAt.toISOString()}`);
                     }
                     
                     // Process any queued commands when device connects/identifies
