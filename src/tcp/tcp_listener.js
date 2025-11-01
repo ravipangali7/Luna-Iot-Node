@@ -100,6 +100,7 @@ class TCPListener {
             });
 
             socket.setKeepAlive(true, 60000); // 60 seconds
+            socket.setNoDelay(true); // Disable Nagle's algorithm for immediate sending
             
             // Set timeout duration (default: 24 hours, configurable via TCP_CONNECTION_TIMEOUT env var)
             const timeoutMs = parseInt(process.env.TCP_CONNECTION_TIMEOUT) || 86400000; // 24 hours = 86400000ms

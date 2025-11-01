@@ -18,9 +18,38 @@ class TCPService {
     storeConnection(connectionId, connectionData) {
         this.connections.set(connectionId, connectionData);
         
-        // If device IMEI is available, map it
+        // If device IMEI is available, map it immediately
+        // This ensures commands can be sent instantly after device identifies itself
         if (connectionData.deviceImei) {
-            this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
+            const existingConnectionId = this.deviceImeiMap.get(connectionData.deviceImei);
+            
+            // If IMEI is already mapped, check if we should update to this connection
+            if (existingConnectionId) {
+                const existingConnection = this.connections.get(existingConnectionId);
+                // Update map if existing connection is invalid or this connection is more recent
+                if (!existingConnection || !existingConnection.socket || existingConnection.socket.destroyed) {
+                    this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
+                    if (connectionData.deviceImei === TARGET_IMEI) {
+                        console.log(`[IMEI: ${TARGET_IMEI}] Updated IMEI map - Old connection invalid, using new connectionId: ${connectionId}`);
+                    }
+                } else {
+                    // Both connections valid - use most recent one
+                    const existingTime = existingConnection.lastActivityAt?.getTime() || existingConnection.connectedAt?.getTime() || 0;
+                    const newTime = connectionData.lastActivityAt?.getTime() || connectionData.connectedAt?.getTime() || 0;
+                    if (newTime > existingTime) {
+                        this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
+                        if (connectionData.deviceImei === TARGET_IMEI) {
+                            console.log(`[IMEI: ${TARGET_IMEI}] Updated IMEI map - New connection more recent, connectionId: ${connectionId}`);
+                        }
+                    }
+                }
+            } else {
+                // First time mapping this IMEI
+                this.deviceImeiMap.set(connectionData.deviceImei, connectionId);
+                if (connectionData.deviceImei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] IMEI mapped immediately - connectionId: ${connectionId}, ready for commands`);
+                }
+            }
         }
     }
 
@@ -33,12 +62,60 @@ class TCPService {
         this.connections.delete(connectionId);
     }
 
-    // Find connection by IMEI
+    // Find connection by IMEI with fallback and verification
     findConnectionByImei(imei) {
+        // First try: Use IMEI map (fast lookup)
         const connectionId = this.deviceImeiMap.get(imei);
-        if (!connectionId) return null;
+        if (connectionId) {
+            const connection = this.connections.get(connectionId);
+            // Verify connection is valid and socket is not destroyed
+            if (connection && connection.socket && !connection.socket.destroyed && connection.socket.writable) {
+                return connection;
+            }
+            // Map points to invalid connection, remove it
+            this.deviceImeiMap.delete(imei);
+        }
         
-        return this.connections.get(connectionId);
+        // Fallback: Search all connections by IMEI (slower but reliable)
+        // This handles cases where map is out of sync
+        let foundConnection = null;
+        let mostRecentConnection = null;
+        let mostRecentTime = 0;
+        
+        for (const [connId, connData] of this.connections.entries()) {
+            if (connData.deviceImei === imei) {
+                // Check if socket is valid and writable
+                if (connData.socket && !connData.socket.destroyed && connData.socket.writable) {
+                    // Track most recent connection
+                    const lastActivity = connData.lastActivityAt?.getTime() || connData.connectedAt?.getTime() || 0;
+                    if (lastActivity > mostRecentTime) {
+                        mostRecentTime = lastActivity;
+                        mostRecentConnection = connData;
+                    }
+                    foundConnection = connData;
+                }
+            }
+        }
+        
+        // Use most recent connection if multiple found
+        if (mostRecentConnection) {
+            // Update map with most recent connection
+            const recentConnId = Array.from(this.connections.entries())
+                .find(([id, data]) => data === mostRecentConnection)?.[0];
+            if (recentConnId) {
+                this.deviceImeiMap.set(imei, recentConnId);
+            }
+            return mostRecentConnection;
+        }
+        
+        // Log for target IMEI if connection not found
+        if (imei === TARGET_IMEI) {
+            const totalConnections = this.connections.size;
+            const mappedConnections = Array.from(this.deviceImeiMap.keys()).length;
+            console.log(`[IMEI: ${TARGET_IMEI}] ⚠️ Connection not found - Total connections: ${totalConnections}, Mapped IMEIs: ${mappedConnections}`);
+        }
+        
+        return null;
     }
 
     // Check if device is connected by IMEI
@@ -74,6 +151,21 @@ class TCPService {
                 };
             }
 
+            // Verify socket is writable before sending
+            if (!connection.socket.writable) {
+                if (imei === TARGET_IMEI) {
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket not writable - cannot send command`);
+                }
+                // Socket not writable, queue command instead
+                this.queueCommand(imei, 'RELAY', command);
+                return { 
+                    success: false, 
+                    command: command, 
+                    queued: true,
+                    error: 'Socket not writable'
+                };
+            }
+
             // Build relay command based on your GT06 protocol
             let relayCommand;
             if (command === 'ON') {
@@ -90,13 +182,43 @@ class TCPService {
                 throw new Error(`Invalid relay command: ${command}`);
             }
             
-            // Send command to device
-            connection.socket.write(relayCommand);
-            
-            // Target IMEI specific logging with packet details
-            if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING RELAY COMMAND - Command: ${command}, Packet Hex: ${relayCommand.toString('hex')}, Packet ASCII: ${relayCommand.toString('ascii').replace('\n', '\\n')}, Length: ${relayCommand.length} bytes, Timestamp: ${new Date().toISOString()}`);
-                console.log(`[IMEI: ${TARGET_IMEI}] Relay command packet bytes:`, Array.from(relayCommand).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+            // Send command to device with error handling and callback
+            try {
+                // Enable no delay for immediate sending
+                connection.socket.setNoDelay(true);
+                
+                // Write with callback to confirm data was sent
+                const writeSuccess = connection.socket.write(relayCommand, (error) => {
+                    if (error) {
+                        if (imei === TARGET_IMEI) {
+                            console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error:`, error);
+                        }
+                        // Queue command if write fails
+                        this.queueCommand(imei, 'RELAY', command);
+                    } else {
+                        if (imei === TARGET_IMEI) {
+                            console.log(`[IMEI: ${TARGET_IMEI}] ✅ Command ${command} confirmed sent to socket`);
+                        }
+                    }
+                });
+                
+                if (!writeSuccess) {
+                    // Socket buffer is full, data was queued internally
+                    if (imei === TARGET_IMEI) {
+                        console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket buffer full, command queued in socket buffer`);
+                    }
+                }
+                
+                // Target IMEI specific logging with packet details
+                if (imei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING RELAY COMMAND - Command: ${command}, Packet Hex: ${relayCommand.toString('hex')}, Packet ASCII: ${relayCommand.toString('ascii').replace('\n', '\\n')}, Length: ${relayCommand.length} bytes, Writable: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Relay command packet bytes:`, Array.from(relayCommand).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+                }
+            } catch (writeError) {
+                if (imei === TARGET_IMEI) {
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error writing to socket:`, writeError);
+                }
+                throw writeError;
             }
             
             return { success: true, command: command, queued: false };
@@ -141,6 +263,21 @@ class TCPService {
                 };
             }
 
+            // Verify socket is writable before sending
+            if (!connection.socket.writable) {
+                if (imei === TARGET_IMEI) {
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket not writable - cannot send command`);
+                }
+                // Socket not writable, queue command instead
+                this.queueCommand(imei, commandType, params);
+                return { 
+                    success: false, 
+                    commandType: commandType,
+                    queued: true,
+                    error: 'Socket not writable'
+                };
+            }
+
             // Get command buffer based on type
             const commandBuffer = this.getCommandBuffer(commandType, params);
             if (!commandBuffer) {
@@ -150,13 +287,43 @@ class TCPService {
                 throw new Error(`Unknown command type: ${commandType}`);
             }
             
-            // Send command to device
-            connection.socket.write(commandBuffer);
-            
-            // Target IMEI specific logging with packet details
-            if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING COMMAND - Type: ${commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Packet ASCII: ${commandBuffer.toString('ascii').replace('\n', '\\n')}, Length: ${commandBuffer.length} bytes, Timestamp: ${new Date().toISOString()}`);
-                console.log(`[IMEI: ${TARGET_IMEI}] Command packet bytes:`, Array.from(commandBuffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+            // Send command to device with error handling and callback
+            try {
+                // Enable no delay for immediate sending
+                connection.socket.setNoDelay(true);
+                
+                // Write with callback to confirm data was sent
+                const writeSuccess = connection.socket.write(commandBuffer, (error) => {
+                    if (error) {
+                        if (imei === TARGET_IMEI) {
+                            console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error:`, error);
+                        }
+                        // Queue command if write fails
+                        this.queueCommand(imei, commandType, params);
+                    } else {
+                        if (imei === TARGET_IMEI) {
+                            console.log(`[IMEI: ${TARGET_IMEI}] ✅ Command ${commandType} confirmed sent to socket`);
+                        }
+                    }
+                });
+                
+                if (!writeSuccess) {
+                    // Socket buffer is full, data was queued internally
+                    if (imei === TARGET_IMEI) {
+                        console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket buffer full, command queued in socket buffer`);
+                    }
+                }
+                
+                // Target IMEI specific logging with packet details
+                if (imei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING COMMAND - Type: ${commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Packet ASCII: ${commandBuffer.toString('ascii').replace('\n', '\\n')}, Length: ${commandBuffer.length} bytes, Writable: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Command packet bytes:`, Array.from(commandBuffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+                }
+            } catch (writeError) {
+                if (imei === TARGET_IMEI) {
+                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error writing to socket:`, writeError);
+                }
+                throw writeError;
             }
             
             return { success: true, commandType: commandType, queued: false };
