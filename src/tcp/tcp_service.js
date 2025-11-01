@@ -373,12 +373,24 @@ class TCPService {
                 return Buffer.from('DYD#\n');
             case 'RELAY':
                 // RELAY command with params: 'ON', 'OFF', or {command: 'ON'/'OFF'}
-                const relayCommand = (typeof params === 'string') ? params : (params.command || '');
+                let relayCommand = '';
+                if (typeof params === 'string') {
+                    relayCommand = params;
+                } else if (params && typeof params === 'object') {
+                    relayCommand = params.command || '';
+                } else {
+                    return null;
+                }
+                
+                // Normalize command to uppercase for comparison
+                relayCommand = relayCommand.toString().trim().toUpperCase();
+                
                 if (relayCommand === 'ON') {
                     return Buffer.from('HFYD#\n');
                 } else if (relayCommand === 'OFF') {
                     return Buffer.from('DYD#\n');
                 }
+                // Log for debugging (will be filtered by TARGET_IMEI check in processQueuedCommands)
                 return null;
             case 'RESET':
                 return Buffer.from('RESET#\n'); // Verify actual GT06 reset command
@@ -472,6 +484,12 @@ class TCPService {
         // Minimal trigger log - only for target IMEI
         if (imei === TARGET_IMEI) {
             console.log(`[QUEUE] Processing triggered (${commands.length} commands)`);
+            // Diagnostic: Show queue contents
+            commands.forEach((cmd, idx) => {
+                console.log(`[QUEUE] Command ${idx + 1}: Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}, DataType=${typeof cmd.commandData}`);
+            });
+            // Diagnostic: Show connection status
+            console.log(`[QUEUE] Connection: Found=${!!connection}, Socket=${!!connection?.socket}, Writable=${connection?.socket?.writable}, Destroyed=${connection?.socket?.destroyed}`);
         }
 
         // Sort by priority (higher priority first)
@@ -485,7 +503,22 @@ class TCPService {
 
         for (const cmd of commands) {
             try {
+                // Diagnostic: Log what we're trying to build
+                if (imei === TARGET_IMEI) {
+                    console.log(`[QUEUE] Building buffer: Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}`);
+                }
+                
                 const commandBuffer = this.getCommandBuffer(cmd.commandType, cmd.commandData);
+                
+                // Diagnostic: Log getCommandBuffer result
+                if (imei === TARGET_IMEI) {
+                    if (commandBuffer) {
+                        console.log(`[QUEUE] Buffer created: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
+                    } else {
+                        console.log(`[QUEUE] ❌ getCommandBuffer returned NULL for Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}`);
+                    }
+                }
+                
                 if (commandBuffer) {
                     // Verify socket is still writable before each command
                     if (!connection.socket.writable || connection.socket.destroyed) {
@@ -510,9 +543,16 @@ class TCPService {
                         console.log(`[QUEUE] Sending: ${commandName}`);
                     }
                 } else {
+                    // Log when getCommandBuffer returns null
+                    if (imei === TARGET_IMEI) {
+                        console.log(`[QUEUE] ❌ Command failed - getCommandBuffer returned null for Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}`);
+                    }
                     failed++;
                 }
             } catch (error) {
+                if (imei === TARGET_IMEI) {
+                    console.log(`[QUEUE] ❌ Exception: ${error.message}`);
+                }
                 failed++;
             }
         }
