@@ -52,17 +52,20 @@ class TCPListener {
                 let datahandler = new tcpHandler.DataHandler();
                 datahandler.handleData(data, socket);
 
-                // Update device IMEI in connection data
+                // Update device IMEI in connection data and process queued commands
+                // This runs for EVERY packet (login, status, location, etc.) after data is processed
                 if (socket.deviceImei) {
+                    const isNewImei = connectionData.deviceImei !== socket.deviceImei;
                     connectionData.deviceImei = socket.deviceImei;
                     tcpService.storeConnection(connectionId, connectionData);
                     
-                    // Log IMEI identification for target device
-                    if (socket.deviceImei === TARGET_IMEI) {
+                    // Log IMEI identification for target device (only on first identification or reconnect)
+                    if (isNewImei && socket.deviceImei === TARGET_IMEI) {
                         console.log(`[IMEI: ${TARGET_IMEI}] ✅ Device IMEI identified - ConnectionId: ${connectionId}, IP: ${socket.remoteAddress}:${socket.remotePort}, ConnectedAt: ${connectionData.connectedAt.toISOString()}`);
                     }
                     
-                    // Process any queued commands when device connects/identifies
+                    // Process queued commands on EVERY packet after IMEI is identified
+                    // This ensures commands are sent immediately when device is online
                     tcpService.processQueuedCommands(socket.deviceImei);
                 }
             });

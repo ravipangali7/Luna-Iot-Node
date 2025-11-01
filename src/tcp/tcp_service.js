@@ -455,11 +455,32 @@ class TCPService {
             return { processed: 0, failed: 0 };
         }
 
-        const connection = this.findConnectionByImei(imei);
+        // Find connection with retry logic for reliability
+        let connection = this.findConnectionByImei(imei);
+        
+        // Retry once if connection not found (might be timing issue)
         if (!connection || !connection.socket || connection.socket.destroyed) {
             // Only log for target IMEI
             if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] Cannot process queued commands: device not connected`);
+                console.log(`[IMEI: ${TARGET_IMEI}] Cannot process queued commands: device not connected - retrying connection lookup`);
+            }
+            
+            // Small delay and retry
+            await new Promise(resolve => setTimeout(resolve, 100));
+            connection = this.findConnectionByImei(imei);
+            
+            if (!connection || !connection.socket || connection.socket.destroyed) {
+                if (imei === TARGET_IMEI) {
+                    console.log(`[IMEI: ${TARGET_IMEI}] Retry failed: device still not connected`);
+                }
+                return { processed: 0, failed: 0 };
+            }
+        }
+
+        // Verify socket is writable before processing
+        if (!connection.socket.writable) {
+            if (imei === TARGET_IMEI) {
+                console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket not writable - cannot process queued commands`);
             }
             return { processed: 0, failed: 0 };
         }
@@ -484,16 +505,39 @@ class TCPService {
         let processed = 0;
         let failed = 0;
 
+        // Enable no delay for immediate sending
+        connection.socket.setNoDelay(true);
+
         for (const cmd of commands) {
             try {
                 const commandBuffer = this.getCommandBuffer(cmd.commandType, cmd.commandData);
                 if (commandBuffer) {
-                    connection.socket.write(commandBuffer);
+                    // Verify socket is still writable before each command
+                    if (!connection.socket.writable || connection.socket.destroyed) {
+                        if (imei === TARGET_IMEI) {
+                            console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket became unwritable during processing, stopping`);
+                        }
+                        break;
+                    }
+                    
+                    // Write with callback for confirmation
+                    const writeSuccess = connection.socket.write(commandBuffer, (error) => {
+                        if (error) {
+                            if (imei === TARGET_IMEI) {
+                                console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error for queued command ${cmd.commandType}:`, error);
+                            }
+                        } else {
+                            if (imei === TARGET_IMEI) {
+                                console.log(`[IMEI: ${TARGET_IMEI}] ✅ Queued command ${cmd.commandType} confirmed sent`);
+                            }
+                        }
+                    });
+                    
                     processed++;
                     
                     // Target IMEI specific logging
                     if (imei === TARGET_IMEI) {
-                        console.log(`[IMEI: ${TARGET_IMEI}] 📤 SENDING QUEUED COMMAND - Type: ${cmd.commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Length: ${commandBuffer.length} bytes, Timestamp: ${new Date().toISOString()}`);
+                        console.log(`[IMEI: ${TARGET_IMEI}] 📤 SENDING QUEUED COMMAND - Type: ${cmd.commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Length: ${commandBuffer.length} bytes, WriteSuccess: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
                     }
                 } else {
                     if (imei === TARGET_IMEI) {

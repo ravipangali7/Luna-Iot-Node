@@ -4,6 +4,7 @@ const socketService = require('../../socket/socket_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
 const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
+const tcpService = require('../tcp_service');
 
 // Target IMEI for detailed logging
 const TARGET_IMEI = '352312094594994';
@@ -43,6 +44,7 @@ class GT06Handler {
 
         gt06.msgBuffer.forEach(msg => {
             if (msg.event && msg.event.string === 'login' && msg.imei) {
+                // Set IMEI on socket - this persists for all subsequent packets
                 socket.deviceImei = msg.imei;
                 
                 // Log login for target IMEI
@@ -50,7 +52,15 @@ class GT06Handler {
                     console.log(`[IMEI: ${TARGET_IMEI}] 🔐 Login packet received - IMEI: ${msg.imei}, Timestamp: ${new Date().toISOString()}`);
                 }
             } else {
-                msg.imei = socket.deviceImei || 'Unknown';
+                // For non-login packets, use existing socket IMEI or message IMEI
+                // Ensure IMEI is set on socket if it's in the message but not on socket
+                if (msg.imei && !socket.deviceImei) {
+                    socket.deviceImei = msg.imei;
+                    if (msg.imei === TARGET_IMEI) {
+                        console.log(`[IMEI: ${TARGET_IMEI}] ⚠️ IMEI found in message but not on socket - setting it now`);
+                    }
+                }
+                msg.imei = socket.deviceImei || msg.imei || 'Unknown';
             }
             
             // Log message type for target IMEI
@@ -284,6 +294,12 @@ class GT06Handler {
                 if (data.imei === TARGET_IMEI) {
                     console.log(`[IMEI: ${TARGET_IMEI}] 🔋 Status update processed - Battery: ${statusData.battery}%, Signal: ${statusData.signal}, Ignition: ${statusData.ignition}, Charging: ${statusData.charging}, Relay: ${statusData.relay}, Saved: ${shouldSave}, Timestamp: ${new Date().toISOString()}`);
                 }
+                
+                // Explicitly trigger queued command processing after status packet is processed
+                // This ensures queued relay commands are sent immediately after status is received
+                if (data.imei && socket.deviceImei === data.imei) {
+                    tcpService.processQueuedCommands(data.imei);
+                }
             }
         } else if (data.event.string === 'location') {
             // Skip location events for buzzer and sos device types
@@ -352,6 +368,12 @@ class GT06Handler {
                 // Log location update for target IMEI
                 if (data.imei === TARGET_IMEI) {
                     console.log(`[IMEI: ${TARGET_IMEI}] 📍 Location update processed - Lat: ${locationData.latitude}, Lon: ${locationData.longitude}, Speed: ${locationData.speed} km/h, Course: ${locationData.course}°, Saved: ${shouldSaveLocation}, Timestamp: ${new Date().toISOString()}`);
+                }
+                
+                // Explicitly trigger queued command processing after location packet is processed
+                // This ensures queued relay commands are sent immediately after location is received
+                if (data.imei && socket.deviceImei === data.imei) {
+                    tcpService.processQueuedCommands(data.imei);
                 }
             }
         } else if (data.event.string === 'login') {
