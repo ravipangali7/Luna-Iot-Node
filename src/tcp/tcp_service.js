@@ -138,11 +138,6 @@ class TCPService {
             if (!connection || !connection.socket || connection.socket.destroyed) {
                 // Device not connected - queue the command
                 this.queueCommand(imei, 'RELAY', command);
-                
-                // Target IMEI specific logging
-                if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] ⏳ Relay command ${command} QUEUED (device offline) - Will be sent when device connects`);
-                }
                 return { 
                     success: true, 
                     command: command, 
@@ -188,35 +183,20 @@ class TCPService {
                 connection.socket.setNoDelay(true);
                 
                 // Write with callback to confirm data was sent
-                const writeSuccess = connection.socket.write(relayCommand, (error) => {
+                connection.socket.write(relayCommand, (error) => {
                     if (error) {
-                        if (imei === TARGET_IMEI) {
-                            console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error:`, error);
-                        }
                         // Queue command if write fails
                         this.queueCommand(imei, 'RELAY', command);
-                    } else {
-                        if (imei === TARGET_IMEI) {
-                            console.log(`[IMEI: ${TARGET_IMEI}] ✅ Command ${command} confirmed sent to socket`);
-                        }
                     }
                 });
                 
-                if (!writeSuccess) {
-                    // Socket buffer is full, data was queued internally
-                    if (imei === TARGET_IMEI) {
-                        console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket buffer full, command queued in socket buffer`);
-                    }
-                }
-                
-                // Target IMEI specific logging with packet details
+                // Minimal send log - only for target IMEI
                 if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] 📤 SERVER SENDING RELAY COMMAND - Command: ${command}, Packet Hex: ${relayCommand.toString('hex')}, Packet ASCII: ${relayCommand.toString('ascii').replace('\n', '\\n')}, Length: ${relayCommand.length} bytes, Writable: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
-                    console.log(`[IMEI: ${TARGET_IMEI}] Relay command packet bytes:`, Array.from(relayCommand).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+                    console.log(`[RELAY] Sent: ${command}`);
                 }
             } catch (writeError) {
                 if (imei === TARGET_IMEI) {
-                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error writing to socket:`, writeError);
+                    console.log(`[RELAY] Send error`);
                 }
                 throw writeError;
             }
@@ -225,7 +205,7 @@ class TCPService {
             
         } catch (error) {
             if (imei === TARGET_IMEI) {
-                console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error sending relay command:`, error);
+                console.log(`[RELAY] Error: ${error.message}`);
             }
             return { success: false, error: error.message };
         }
@@ -438,8 +418,10 @@ class TCPService {
         this.commandQueue.get(imei).push(command);
         const queueSize = this.commandQueue.get(imei).length;
         
+        // Minimal queue log - only for target IMEI
         if (imei === TARGET_IMEI) {
-            console.log(`[IMEI: ${TARGET_IMEI}] Command ${commandType} queued - Queue size: ${queueSize}, Priority: ${priority}, Timestamp: ${command.timestamp.toISOString()}`);
+            const commandName = commandType === 'RELAY' ? `RELAY ${commandData}` : commandType;
+            console.log(`[QUEUE] Command queued: ${commandName} (Queue: ${queueSize})`);
         }
         
         return true;
@@ -448,9 +430,9 @@ class TCPService {
     // Process all queued commands for a device
     async processQueuedCommands(imei) {
         if (!imei || !this.commandQueue.has(imei)) {
-            // Only log for target IMEI
+            // Minimal log - only for target IMEI
             if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] No queued commands`);
+                console.log(`[QUEUE] Empty - no commands`);
             }
             return { processed: 0, failed: 0 };
         }
@@ -460,19 +442,12 @@ class TCPService {
         
         // Retry once if connection not found (might be timing issue)
         if (!connection || !connection.socket || connection.socket.destroyed) {
-            // Only log for target IMEI
-            if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] Cannot process queued commands: device not connected - retrying connection lookup`);
-            }
-            
             // Small delay and retry
             await new Promise(resolve => setTimeout(resolve, 100));
             connection = this.findConnectionByImei(imei);
             
             if (!connection || !connection.socket || connection.socket.destroyed) {
-                if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Retry failed: device still not connected`);
-                }
+                // No log for retry failure - device simply not connected
                 return { processed: 0, failed: 0 };
             }
         }
@@ -480,23 +455,23 @@ class TCPService {
         // Verify socket is writable before processing
         if (!connection.socket.writable) {
             if (imei === TARGET_IMEI) {
-                console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket not writable - cannot process queued commands`);
+                console.log(`[QUEUE] Socket not writable`);
             }
             return { processed: 0, failed: 0 };
         }
 
         const commands = this.commandQueue.get(imei);
         if (!commands || commands.length === 0) {
-            // Only log for target IMEI
+            // Minimal log - only for target IMEI
             if (imei === TARGET_IMEI) {
-                console.log(`[IMEI: ${TARGET_IMEI}] Command queue is empty`);
+                console.log(`[QUEUE] Empty - no commands`);
             }
             return { processed: 0, failed: 0 };
         }
 
-        // Target IMEI specific logging
+        // Minimal trigger log - only for target IMEI
         if (imei === TARGET_IMEI) {
-            console.log(`[IMEI: ${TARGET_IMEI}] 📬 Processing ${commands.length} queued commands - Timestamp: ${new Date().toISOString()}`);
+            console.log(`[QUEUE] Processing triggered (${commands.length} commands)`);
         }
 
         // Sort by priority (higher priority first)
@@ -515,40 +490,29 @@ class TCPService {
                     // Verify socket is still writable before each command
                     if (!connection.socket.writable || connection.socket.destroyed) {
                         if (imei === TARGET_IMEI) {
-                            console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Socket became unwritable during processing, stopping`);
+                            console.log(`[QUEUE] Socket unwritable - stopped`);
                         }
                         break;
                     }
                     
                     // Write with callback for confirmation
-                    const writeSuccess = connection.socket.write(commandBuffer, (error) => {
-                        if (error) {
-                            if (imei === TARGET_IMEI) {
-                                console.error(`[IMEI: ${TARGET_IMEI}] ❌ Socket write error for queued command ${cmd.commandType}:`, error);
-                            }
-                        } else {
-                            if (imei === TARGET_IMEI) {
-                                console.log(`[IMEI: ${TARGET_IMEI}] ✅ Queued command ${cmd.commandType} confirmed sent`);
-                            }
+                    connection.socket.write(commandBuffer, (error) => {
+                        if (error && imei === TARGET_IMEI) {
+                            console.log(`[QUEUE] Send failed: ${cmd.commandType}`);
                         }
                     });
                     
                     processed++;
                     
-                    // Target IMEI specific logging
+                    // Minimal send log - only for target IMEI
                     if (imei === TARGET_IMEI) {
-                        console.log(`[IMEI: ${TARGET_IMEI}] 📤 SENDING QUEUED COMMAND - Type: ${cmd.commandType}, Packet Hex: ${commandBuffer.toString('hex')}, Length: ${commandBuffer.length} bytes, WriteSuccess: ${writeSuccess}, Timestamp: ${new Date().toISOString()}`);
+                        const commandName = cmd.commandType === 'RELAY' ? `RELAY ${cmd.commandData}` : cmd.commandType;
+                        console.log(`[QUEUE] Sending: ${commandName}`);
                     }
                 } else {
-                    if (imei === TARGET_IMEI) {
-                        console.warn(`[IMEI: ${TARGET_IMEI}] ⚠️ Invalid command type ${cmd.commandType}, skipping`);
-                    }
                     failed++;
                 }
             } catch (error) {
-                if (imei === TARGET_IMEI) {
-                    console.error(`[IMEI: ${TARGET_IMEI}] ❌ Error processing queued command ${cmd.commandType}:`, error);
-                }
                 failed++;
             }
         }
@@ -556,8 +520,11 @@ class TCPService {
         // Clear processed commands
         this.clearQueuedCommands(imei);
 
+        // Minimal completion log - only for target IMEI
         if (imei === TARGET_IMEI) {
-            console.log(`[IMEI: ${TARGET_IMEI}] ✅ Completed processing queued commands - Processed: ${processed}, Failed: ${failed}`);
+            if (processed > 0 || failed > 0) {
+                console.log(`[QUEUE] Completed: ${processed} sent, ${failed} failed`);
+            }
         }
         return { processed, failed };
     }

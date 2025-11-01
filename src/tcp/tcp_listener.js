@@ -66,6 +66,7 @@ class TCPListener {
                     
                     // Process queued commands on EVERY packet after IMEI is identified
                     // This ensures commands are sent immediately when device is online
+                    // Note: Queue processing also triggered explicitly in gt06_handler after status/location packets
                     tcpService.processQueuedCommands(socket.deviceImei);
                 }
             });

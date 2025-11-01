@@ -298,6 +298,10 @@ class GT06Handler {
                 // Explicitly trigger queued command processing after status packet is processed
                 // This ensures queued relay commands are sent immediately after status is received
                 if (data.imei && socket.deviceImei === data.imei) {
+                    // Minimal log when queue processing is triggered by status packet
+                    if (data.imei === TARGET_IMEI) {
+                        console.log(`[QUEUE] Triggered by status packet`);
+                    }
                     tcpService.processQueuedCommands(data.imei);
                 }
             }
@@ -373,6 +377,10 @@ class GT06Handler {
                 // Explicitly trigger queued command processing after location packet is processed
                 // This ensures queued relay commands are sent immediately after location is received
                 if (data.imei && socket.deviceImei === data.imei) {
+                    // Minimal log when queue processing is triggered by location packet
+                    if (data.imei === TARGET_IMEI) {
+                        console.log(`[QUEUE] Triggered by location packet`);
+                    }
                     tcpService.processQueuedCommands(data.imei);
                 }
             }
