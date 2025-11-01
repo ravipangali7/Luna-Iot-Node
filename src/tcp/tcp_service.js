@@ -852,6 +852,9 @@ class TCPService {
         try {
             // Minimum packet size check
             if (data.length < 5) {
+                if (data.length >= 4 && data[0] === 0x78 && data[1] === 0x78 && (data[3] === 0x13 || data[3] === 0x15)) {
+                    console.log(`[PARSE] ⚠️ Packet too short for ${TARGET_IMEI}: length=${data.length}, hex=${data.toString('hex')}`);
+                }
                 return null;
             }
 
@@ -864,7 +867,9 @@ class TCPService {
             const packetLength = data[2];
             
             // Check if we have enough data
-            if (data.length < 3 + packetLength) {
+            const expectedTotalLength = 3 + packetLength; // Start(2) + Length(1) + packetLength bytes
+            if (data.length < expectedTotalLength) {
+                console.log(`[PARSE] ⚠️ Packet incomplete for ${TARGET_IMEI}: have=${data.length}, need=${expectedTotalLength}, length byte=${packetLength}, hex=${data.toString('hex')}`);
                 return null;
             }
 
@@ -879,9 +884,17 @@ class TCPService {
             // Extract Information Content
             // InfoContent starts at index 4 and has length: packetLength - 1 (protocol) - 2 (checksum) - 2 (stop) = packetLength - 5
             const infoContentLength = packetLength - 1 - 2 - 2; // protocol(1) + checksum(2) + stop(2)
+            
+            // Debug logging for target IMEI
+            if (infoContentLength <= 0) {
+                console.log(`[PARSE] ⚠️ Invalid InfoContent length for ${TARGET_IMEI}: packetLength=${packetLength}, infoContentLength=${infoContentLength}, hex=${data.toString('hex')}`);
+                return null;
+            }
+            
             const infoContent = data.slice(4, 4 + infoContentLength);
             
             if (infoContent.length < 1) {
+                console.log(`[PARSE] ⚠️ InfoContent too short for ${TARGET_IMEI}: length=${infoContent.length}, hex=${data.toString('hex')}`);
                 return null;
             }
 
@@ -891,7 +904,16 @@ class TCPService {
             const serverFlagBit = infoContent.slice(1, 5); // 4 bytes
             const commandContentLength = commandLength - 4; // Command Length includes Server Flag Bit (4 bytes)
             
+            // Debug: Log packet structure for target IMEI
+            console.log(`[PARSE] 📦 Parsing GT06 response for ${TARGET_IMEI}: packetLength=${packetLength}, infoContentLength=${infoContentLength}, commandLength=${commandLength}, commandContentLength=${commandContentLength}, infoContent hex=${infoContent.toString('hex')}`);
+            
+            if (commandContentLength <= 0) {
+                console.log(`[PARSE] ⚠️ Invalid commandContentLength for ${TARGET_IMEI}: commandLength=${commandLength}, commandContentLength=${commandContentLength}`);
+                return null;
+            }
+            
             if (infoContent.length < 5 + commandContentLength + 4) {
+                console.log(`[PARSE] ⚠️ InfoContent incomplete for ${TARGET_IMEI}: have=${infoContent.length}, need=${5 + commandContentLength + 4}, commandContentLength=${commandContentLength}`);
                 return null;
             }
 
@@ -903,6 +925,8 @@ class TCPService {
             // Convert to ASCII string
             const responseText = commandContent.toString('ascii');
             
+            console.log(`[PARSE] ✅ Parsed GT06 response for ${TARGET_IMEI}: "${responseText}" (hex: ${commandContent.toString('hex')})`);
+            
             return {
                 protocolNumber: protocolNumber,
                 responseText: responseText,
@@ -911,6 +935,7 @@ class TCPService {
             };
         } catch (e) {
             // Parsing failed
+            console.log(`[PARSE] ❌ Parse error for ${TARGET_IMEI}:`, e.message, `Hex: ${data.toString('hex')}`);
             return null;
         }
     }
@@ -924,12 +949,18 @@ class TCPService {
             return false;
         }
 
+        console.log(`[DETECT] 🔍 detectDeviceResponse called for ${imei}, data length: ${data.length}, hex: ${data.toString('hex')}`);
+
         // First, check if it's a GT06 protocol response packet
         if (data.length >= 4 && data[0] === 0x78 && data[1] === 0x78) {
             const protocolNumber = data[3];
+            console.log(`[DETECT] 📦 GT06 protocol packet detected - Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}, Length: ${data.length}`);
+            
             // Check if it's a command response protocol (0x13 or 0x15)
             if (protocolNumber === 0x13 || protocolNumber === 0x15) {
+                console.log(`[DETECT] ✅ Command response protocol detected (0x${protocolNumber.toString(16).padStart(2, '0')}) - parsing...`);
                 const parsed = this.parseGT06ResponsePacket(data);
+                
                 if (parsed && parsed.responseText) {
                     console.log(`[DEVICE RESPONSE] 📥 GT06 Protocol Response detected for IMEI ${imei}:`);
                     console.log(`[DEVICE RESPONSE] Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}`);
@@ -960,8 +991,14 @@ class TCPService {
                     }
                     
                     return true;
+                } else {
+                    console.log(`[DETECT] ❌ parseGT06ResponsePacket returned null - parsing failed`);
                 }
+            } else {
+                console.log(`[DETECT] ℹ️ Not a command response protocol (0x${protocolNumber.toString(16).padStart(2, '0')}) - skipping`);
             }
+        } else {
+            console.log(`[DETECT] ℹ️ Not a GT06 protocol packet (doesn't start with 0x78 0x78)`);
         }
 
         // Fallback: Try to convert data to ASCII string (for plain ASCII responses)
