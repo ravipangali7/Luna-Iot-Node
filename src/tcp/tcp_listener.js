@@ -67,7 +67,15 @@ class TCPListener {
                     // Process queued commands on EVERY packet after IMEI is identified
                     // This ensures commands are sent immediately when device is online
                     // Note: Queue processing also triggered explicitly in gt06_handler after status/location packets
+                    if (socket.deviceImei === TARGET_IMEI) {
+                        console.log(`[QUEUE] tcp_listener calling processQueuedCommands - IMEI: ${socket.deviceImei}`);
+                    }
                     tcpService.processQueuedCommands(socket.deviceImei);
+                } else {
+                    // Log when IMEI is not set (only for target IMEI context)
+                    if (connectionData.deviceImei === TARGET_IMEI) {
+                        console.log(`[QUEUE] tcp_listener - socket.deviceImei not set yet, cannot process queue`);
+                    }
                 }
             });
 

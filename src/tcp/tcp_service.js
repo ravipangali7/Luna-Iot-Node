@@ -441,6 +441,11 @@ class TCPService {
 
     // Process all queued commands for a device
     async processQueuedCommands(imei) {
+        // Entry log - show ALL calls, especially useful when IMEI is null/undefined
+        if (!imei || imei === TARGET_IMEI) {
+            console.log(`[QUEUE] processQueuedCommands called - IMEI: ${imei || 'NULL'}, HasQueue: ${imei ? this.commandQueue.has(imei) : false}`);
+        }
+        
         if (!imei || !this.commandQueue.has(imei)) {
             // Minimal log - only for target IMEI
             if (imei === TARGET_IMEI) {

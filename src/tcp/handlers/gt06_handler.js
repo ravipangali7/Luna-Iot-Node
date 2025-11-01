@@ -297,12 +297,25 @@ class GT06Handler {
                 
                 // Explicitly trigger queued command processing after status packet is processed
                 // This ensures queued relay commands are sent immediately after status is received
-                if (data.imei && socket.deviceImei === data.imei) {
+                // Use data.imei if available, otherwise fallback to socket.deviceImei
+                const imeiForQueue = data.imei || socket.deviceImei;
+                
+                // Log IMEI values for debugging (only for target IMEI)
+                if (data.imei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    console.log(`[QUEUE] Status packet - data.imei: ${data.imei || 'NULL'}, socket.deviceImei: ${socket.deviceImei || 'NULL'}, Using: ${imeiForQueue || 'NULL'}`);
+                }
+                
+                if (imeiForQueue) {
                     // Minimal log when queue processing is triggered by status packet
-                    if (data.imei === TARGET_IMEI) {
+                    if (imeiForQueue === TARGET_IMEI) {
                         console.log(`[QUEUE] Triggered by status packet`);
                     }
-                    tcpService.processQueuedCommands(data.imei);
+                    tcpService.processQueuedCommands(imeiForQueue);
+                } else {
+                    // Log when condition fails
+                    if (data.imei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                        console.log(`[QUEUE] ❌ Status packet - Cannot process queue: both IMEIs are null/undefined`);
+                    }
                 }
             }
         } else if (data.event.string === 'location') {
@@ -376,12 +389,25 @@ class GT06Handler {
                 
                 // Explicitly trigger queued command processing after location packet is processed
                 // This ensures queued relay commands are sent immediately after location is received
-                if (data.imei && socket.deviceImei === data.imei) {
+                // Use data.imei if available, otherwise fallback to socket.deviceImei
+                const imeiForQueue = data.imei || socket.deviceImei;
+                
+                // Log IMEI values for debugging (only for target IMEI)
+                if (data.imei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                    console.log(`[QUEUE] Location packet - data.imei: ${data.imei || 'NULL'}, socket.deviceImei: ${socket.deviceImei || 'NULL'}, Using: ${imeiForQueue || 'NULL'}`);
+                }
+                
+                if (imeiForQueue) {
                     // Minimal log when queue processing is triggered by location packet
-                    if (data.imei === TARGET_IMEI) {
+                    if (imeiForQueue === TARGET_IMEI) {
                         console.log(`[QUEUE] Triggered by location packet`);
                     }
-                    tcpService.processQueuedCommands(data.imei);
+                    tcpService.processQueuedCommands(imeiForQueue);
+                } else {
+                    // Log when condition fails
+                    if (data.imei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+                        console.log(`[QUEUE] ❌ Location packet - Cannot process queue: both IMEIs are null/undefined`);
+                    }
                 }
             }
         } else if (data.event.string === 'login') {
