@@ -27,13 +27,13 @@ This document describes what packets/data the server sends to devices via TCP co
 
 ## 2. Relay ON Command
 
-**Location:** `tcp_service.js` sendRelayCommand() method, line 85
+**Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `HFYD#\n`
-- Hex: `0x48 0x46 0x59 0x44 0x23 0x0A`
-- Bytes: `48 46 59 44 23 0A`
-- Length: 6 bytes
+- ASCII: `RELAY,1#\n`
+- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x31 0x23 0x0A`
+- Bytes: `52 45 4C 41 59 2C 31 23 0A`
+- Length: 9 bytes
 
 **Purpose:** Turn relay ON on the device
 
@@ -45,13 +45,13 @@ This document describes what packets/data the server sends to devices via TCP co
 
 ## 3. Relay OFF Command
 
-**Location:** `tcp_service.js` sendRelayCommand() method, line 88
+**Location:** `tcp_service.js` sendRelayCommand() method and getCommandBuffer()
 
 **Packet Format:**
-- ASCII: `DYD#\n`
-- Hex: `0x44 0x59 0x44 0x23 0x0A`
-- Bytes: `44 59 44 23 0A`
-- Length: 5 bytes
+- ASCII: `RELAY,0#\n`
+- Hex: `0x52 0x45 0x4C 0x41 0x59 0x2C 0x30 0x23 0x0A`
+- Bytes: `52 45 4C 41 59 2C 30 23 0A`
+- Length: 9 bytes
 
 **Purpose:** Turn relay OFF on the device
 
@@ -100,8 +100,8 @@ This document describes what packets/data the server sends to devices via TCP co
 | Command Type | Packet (ASCII) | Hex Format | Length | Purpose |
 |--------------|----------------|------------|--------|---------|
 | GT06 ACK | Auto-generated | `78780501...0d0a` | Variable | Acknowledge device data |
-| Relay ON | `HFYD#\n` | `48 46 59 44 23 0A` | 6 bytes | Turn relay ON |
-| Relay OFF | `DYD#\n` | `44 59 44 23 0A` | 5 bytes | Turn relay OFF |
+| Relay ON | `RELAY,1#\n` | `52 45 4C 41 59 2C 31 23 0A` | 9 bytes | Turn relay ON |
+| Relay OFF | `RELAY,0#\n` | `52 45 4C 41 59 2C 30 23 0A` | 9 bytes | Turn relay OFF |
 | RESET | `RESET#\n` | `52 45 53 45 54 23 0A` | 7 bytes | Reset device |
 | SERVER_POINT | `SERVER,IP:PORT#\n` | Variable | Variable | Configure server |
 

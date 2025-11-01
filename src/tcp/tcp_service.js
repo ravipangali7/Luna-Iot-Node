@@ -196,17 +196,17 @@ class TCPService {
                 };
             }
 
-            // Build relay command based on your GT06 protocol
+            // Build relay command based on GT06 protocol (RELAY,1# for ON, RELAY,0# for OFF)
             let relayCommand;
             if (command === 'ON') {
-                relayCommand = Buffer.from('HFYD#\n'); // Your ON command
+                relayCommand = Buffer.from('RELAY,1#\n'); // GT06 relay ON command
                 if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay ON command buffer: HFYD#\\n`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay ON command buffer: RELAY,1#\\n`);
                 }
             } else if (command === 'OFF') {
-                relayCommand = Buffer.from('DYD#\n');  // Your OFF command
+                relayCommand = Buffer.from('RELAY,0#\n');  // GT06 relay OFF command
                 if (imei === TARGET_IMEI) {
-                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay OFF command buffer: DYD#\\n`);
+                    console.log(`[IMEI: ${TARGET_IMEI}] Built relay OFF command buffer: RELAY,0#\\n`);
                 }
             } else {
                 throw new Error(`Invalid relay command: ${command}`);
@@ -380,14 +380,14 @@ class TCPService {
     // ========================================
     // 
     // 2. RELAY ON COMMAND
-    //    Packet: 'HFYD#\n' (hex: 0x48 0x46 0x59 0x44 0x23 0x0A)
+    //    Packet: 'RELAY,1#\n' (hex: 0x52 0x45 0x4C 0x41 0x59 0x2C 0x31 0x23 0x0A)
     //    Purpose: Turn relay ON on device
-    //    Location: tcp_service.js sendRelayCommand() method
+    //    Location: tcp_service.js sendRelayCommand() method and getCommandBuffer()
     //
     // 3. RELAY OFF COMMAND  
-    //    Packet: 'DYD#\n' (hex: 0x44 0x59 0x44 0x23 0x0A)
+    //    Packet: 'RELAY,0#\n' (hex: 0x52 0x45 0x4C 0x41 0x59 0x2C 0x30 0x23 0x0A)
     //    Purpose: Turn relay OFF on device
-    //    Location: tcp_service.js sendRelayCommand() method
+    //    Location: tcp_service.js sendRelayCommand() method and getCommandBuffer()
     //
     // 4. RESET COMMAND
     //    Packet: 'RESET#\n' (hex: 0x52 0x45 0x53 0x45 0x54 0x23 0x0A)
@@ -403,9 +403,9 @@ class TCPService {
     getCommandBuffer(commandType, params = {}) {
         switch (commandType) {
             case 'RELAY_ON':
-                return Buffer.from('HFYD#\n');
+                return Buffer.from('RELAY,1#\n');
             case 'RELAY_OFF':
-                return Buffer.from('DYD#\n');
+                return Buffer.from('RELAY,0#\n');
             case 'RELAY':
                 // RELAY command with params: 'ON', 'OFF', or {command: 'ON'/'OFF'}
                 let relayCommand = '';
@@ -421,9 +421,9 @@ class TCPService {
                 relayCommand = relayCommand.toString().trim().toUpperCase();
                 
                 if (relayCommand === 'ON') {
-                    return Buffer.from('HFYD#\n');
+                    return Buffer.from('RELAY,1#\n');
                 } else if (relayCommand === 'OFF') {
-                    return Buffer.from('DYD#\n');
+                    return Buffer.from('RELAY,0#\n');
                 }
                 // Log for debugging (will be filtered by TARGET_IMEI check in processQueuedCommands)
                 return null;
