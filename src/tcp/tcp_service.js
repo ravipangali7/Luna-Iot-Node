@@ -846,14 +846,125 @@ class TCPService {
         return this.deviceImeiMap.size;
     }
 
+    // Parse GT06 protocol response packet according to section 6.2
+    // Device responses have same structure as server commands but with Protocol Number 0x15 (or 0x13)
+    parseGT06ResponsePacket(data) {
+        try {
+            // Minimum packet size check
+            if (data.length < 5) {
+                return null;
+            }
+
+            // Check start bit
+            if (data[0] !== 0x78 || data[1] !== 0x78) {
+                return null;
+            }
+
+            // Get packet length (from Protocol Number to Stop Bit)
+            const packetLength = data[2];
+            
+            // Check if we have enough data
+            if (data.length < 3 + packetLength) {
+                return null;
+            }
+
+            // Get protocol number (should be 0x15 for response, but some devices use 0x13)
+            const protocolNumber = data[3];
+            
+            // Only parse if it's a command response protocol
+            if (protocolNumber !== 0x13 && protocolNumber !== 0x15) {
+                return null;
+            }
+
+            // Extract Information Content
+            // InfoContent starts at index 4 and has length: packetLength - 1 (protocol) - 2 (checksum) - 2 (stop) = packetLength - 5
+            const infoContentLength = packetLength - 1 - 2 - 2; // protocol(1) + checksum(2) + stop(2)
+            const infoContent = data.slice(4, 4 + infoContentLength);
+            
+            if (infoContent.length < 1) {
+                return null;
+            }
+
+            // Parse Information Content structure:
+            // Command Length (1) + Server Flag Bit (4) + Command Content (variable) + Language (2) + Serial (2)
+            const commandLength = infoContent[0];
+            const serverFlagBit = infoContent.slice(1, 5); // 4 bytes
+            const commandContentLength = commandLength - 4; // Command Length includes Server Flag Bit (4 bytes)
+            
+            if (infoContent.length < 5 + commandContentLength + 4) {
+                return null;
+            }
+
+            // Extract Command Content (ASCII text response)
+            const commandContentStart = 5; // After Command Length (1) + Server Flag (4)
+            const commandContentEnd = commandContentStart + commandContentLength;
+            const commandContent = infoContent.slice(commandContentStart, commandContentEnd);
+            
+            // Convert to ASCII string
+            const responseText = commandContent.toString('ascii');
+            
+            return {
+                protocolNumber: protocolNumber,
+                responseText: responseText,
+                packetLength: packetLength,
+                commandLength: commandLength
+            };
+        } catch (e) {
+            // Parsing failed
+            return null;
+        }
+    }
+
     // Detect and log device responses to relay commands
-    // Device responses come as ASCII text: HFYD=Success!, DYD=Success!, etc.
+    // Device responses can come as:
+    // 1. Plain ASCII text: HFYD=Success!, DYD=Success!, etc.
+    // 2. GT06 protocol packets with protocol 0x13 or 0x15 containing the response text
     detectDeviceResponse(data, imei) {
         if (!imei || imei !== TARGET_IMEI) {
             return false;
         }
 
-        // Try to convert data to ASCII string
+        // First, check if it's a GT06 protocol response packet
+        if (data.length >= 4 && data[0] === 0x78 && data[1] === 0x78) {
+            const protocolNumber = data[3];
+            // Check if it's a command response protocol (0x13 or 0x15)
+            if (protocolNumber === 0x13 || protocolNumber === 0x15) {
+                const parsed = this.parseGT06ResponsePacket(data);
+                if (parsed && parsed.responseText) {
+                    console.log(`[DEVICE RESPONSE] 📥 GT06 Protocol Response detected for IMEI ${imei}:`);
+                    console.log(`[DEVICE RESPONSE] Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}`);
+                    console.log(`[DEVICE RESPONSE] Response Text: ${parsed.responseText}`);
+                    console.log(`[DEVICE RESPONSE] Full Packet Hex: ${data.toString('hex')}`);
+                    console.log(`[DEVICE RESPONSE] Packet Length: ${data.length} bytes`);
+                    console.log(`[DEVICE RESPONSE] Timestamp: ${new Date().toISOString()}`);
+                    
+                    // Parse specific responses
+                    const responseText = parsed.responseText;
+                    if (responseText.includes('HFYD=Success!')) {
+                        console.log(`[DEVICE RESPONSE] ✅ Relay ON command SUCCESSFUL - Oil/electricity connected`);
+                    } else if (responseText.includes('HFYD=Fail!')) {
+                        console.log(`[DEVICE RESPONSE] ❌ Relay ON command FAILED - Oil/electricity not connected`);
+                    } else if (responseText.includes('DYD=Success!')) {
+                        console.log(`[DEVICE RESPONSE] ✅ Relay OFF command SUCCESSFUL - Oil/electricity cut off`);
+                    } else if (responseText.includes('DYD=Unvalued Fix')) {
+                        console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - GPS fix not valid (Unvalued Fix)`);
+                    } else if (responseText.includes('DYD=Speed Limit')) {
+                        const speedMatch = responseText.match(/Speed Limit, Speed (\d+)km\/h/);
+                        if (speedMatch) {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high: ${speedMatch[1]} km/h (must be < 20 km/h)`);
+                        } else {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high (must be < 20 km/h)`);
+                        }
+                    } else {
+                        console.log(`[DEVICE RESPONSE] ⚠️ Unknown response format: ${responseText}`);
+                    }
+                    
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: Try to convert data to ASCII string (for plain ASCII responses)
         let asciiText = '';
         try {
             // Check if data is ASCII text (not binary GT06 protocol)
@@ -867,7 +978,7 @@ class TCPService {
                 
                 // Check for device response patterns
                 if (asciiText.includes('HFYD=') || asciiText.includes('DYD=')) {
-                    console.log(`[DEVICE RESPONSE] 📥 Device response detected for IMEI ${imei}:`);
+                    console.log(`[DEVICE RESPONSE] 📥 ASCII Device response detected for IMEI ${imei}:`);
                     console.log(`[DEVICE RESPONSE] ASCII: ${asciiText}`);
                     console.log(`[DEVICE RESPONSE] Hex: ${data.toString('hex')}`);
                     console.log(`[DEVICE RESPONSE] Length: ${data.length} bytes`);

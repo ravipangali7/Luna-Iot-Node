@@ -12,11 +12,45 @@ const TARGET_IMEI = '352312094594994';
 class GT06Handler {
 
     constructor(data, socket) {
-        // Check for ASCII text device responses BEFORE parsing as GT06 protocol
-        // Device responses like "HFYD=Success!" or "DYD=Success!" come as plain ASCII text
-        if (socket.deviceImei === TARGET_IMEI) {
+        const currentImei = socket.deviceImei;
+        
+        // Check for GT06 protocol command response packets (protocol 0x13 or 0x15)
+        // These are device responses to server commands (relay ON/OFF, etc.)
+        if (data.length >= 4 && data[0] === 0x78 && data[1] === 0x78) {
+            const protocolNumber = data[3];
+            
+            // Check if it's a command response protocol (0x13 or 0x15)
+            if (protocolNumber === 0x13 || protocolNumber === 0x15) {
+                // Try to parse as GT06 response packet
+                if (currentImei === TARGET_IMEI) {
+                    console.log(`[GT06 HANDLER] 📨 Possible GT06 command response packet for ${TARGET_IMEI} - Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}, Hex: ${data.toString('hex')}`);
+                }
+                
+                // Parse the response packet to extract command response text
+                const parsed = tcpService.parseGT06ResponsePacket(data);
+                if (parsed && parsed.responseText) {
+                    // Log the parsed response
+                    if (currentImei === TARGET_IMEI) {
+                        console.log(`[GT06 HANDLER] 🔔 GT06 Command Response parsed for ${TARGET_IMEI}: ${parsed.responseText}`);
+                    }
+                    
+                    // Also call detectDeviceResponse to handle logging
+                    if (currentImei) {
+                        tcpService.detectDeviceResponse(data, currentImei);
+                    }
+                }
+                
+                // Don't continue with normal GT06 parsing for command responses
+                // They have a different structure and will fail to parse
+                return;
+            }
+        }
+        
+        // Check for ASCII text device responses (plain ASCII, not GT06 protocol)
+        // Device responses like "HFYD=Success!" or "DYD=Success!" can come as plain ASCII text
+        if (currentImei === TARGET_IMEI) {
             try {
-                // Check if this might be ASCII text response (not GT06 protocol)
+                // Check if this might be ASCII text response (not binary GT06 protocol)
                 const firstBytes = data.slice(0, 2);
                 const isGT06Protocol = firstBytes.length === 2 && firstBytes[0] === 0x78 && firstBytes[1] === 0x78;
                 
@@ -29,7 +63,7 @@ class GT06Handler {
                     
                     // Check for device response patterns
                     if (asciiText.includes('HFYD=') || asciiText.includes('DYD=')) {
-                        console.log(`[GT06 HANDLER] 🔔 DEVICE RESPONSE DETECTED for ${TARGET_IMEI}: ${asciiText}`);
+                        console.log(`[GT06 HANDLER] 🔔 ASCII DEVICE RESPONSE DETECTED for ${TARGET_IMEI}: ${asciiText}`);
                     }
                 }
             } catch (e) {
