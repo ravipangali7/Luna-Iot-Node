@@ -848,13 +848,11 @@ class TCPService {
 
     // Parse GT06 protocol response packet according to section 6.2
     // Device responses have same structure as server commands but with Protocol Number 0x15 (or 0x13)
+    // However, actual device responses may have different structure - this function handles both cases
     parseGT06ResponsePacket(data) {
         try {
             // Minimum packet size check
             if (data.length < 5) {
-                if (data.length >= 4 && data[0] === 0x78 && data[1] === 0x78 && (data[3] === 0x13 || data[3] === 0x15)) {
-                    console.log(`[PARSE] ⚠️ Packet too short for ${TARGET_IMEI}: length=${data.length}, hex=${data.toString('hex')}`);
-                }
                 return null;
             }
 
@@ -869,7 +867,6 @@ class TCPService {
             // Check if we have enough data
             const expectedTotalLength = 3 + packetLength; // Start(2) + Length(1) + packetLength bytes
             if (data.length < expectedTotalLength) {
-                console.log(`[PARSE] ⚠️ Packet incomplete for ${TARGET_IMEI}: have=${data.length}, need=${expectedTotalLength}, length byte=${packetLength}, hex=${data.toString('hex')}`);
                 return null;
             }
 
@@ -881,58 +878,101 @@ class TCPService {
                 return null;
             }
 
-            // Extract Information Content
-            // InfoContent starts at index 4 and has length: packetLength - 1 (protocol) - 2 (checksum) - 2 (stop) = packetLength - 5
-            const infoContentLength = packetLength - 1 - 2 - 2; // protocol(1) + checksum(2) + stop(2)
+            // Log full packet structure for analysis
+            console.log(`[PARSE] 🔍 Full packet analysis for ${TARGET_IMEI}:`);
+            console.log(`[PARSE]   Hex: ${data.toString('hex')}`);
+            console.log(`[PARSE]   Length: ${data.length} bytes`);
+            console.log(`[PARSE]   Packet Length byte: ${packetLength} (0x${packetLength.toString(16)})`);
+            console.log(`[PARSE]   Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}`);
+            console.log(`[PARSE]   Bytes breakdown:`, Array.from(data).map((b, i) => `${i}:0x${b.toString(16).padStart(2, '0')}`).join(' '));
             
-            // Debug logging for target IMEI
-            if (infoContentLength <= 0) {
-                console.log(`[PARSE] ⚠️ Invalid InfoContent length for ${TARGET_IMEI}: packetLength=${packetLength}, infoContentLength=${infoContentLength}, hex=${data.toString('hex')}`);
-                return null;
+            // Extract Information Content area (everything between Protocol and Stop Bit)
+            // InfoContent starts at index 4 and ends before checksum
+            const infoContentStart = 4;
+            const checksumStart = 3 + packetLength - 2; // Before last 2 bytes (stop bits)
+            const infoContent = data.slice(infoContentStart, checksumStart);
+            
+            console.log(`[PARSE]   InfoContent area (bytes ${infoContentStart} to ${checksumStart}): ${infoContent.toString('hex')} (${infoContent.length} bytes)`);
+            
+            // Try multiple parsing approaches
+            
+            // Approach 1: Standard GT06 format (Command Length + Server Flag + Command + Language + Serial)
+            if (infoContent.length >= 9) {
+                const commandLength = infoContent[0];
+                const serverFlagBit = infoContent.slice(1, 5); // 4 bytes
+                const commandContentLength = commandLength - 4; // Command Length includes Server Flag Bit
+                
+                if (commandContentLength > 0 && infoContent.length >= 5 + commandContentLength + 4) {
+                    const commandContent = infoContent.slice(5, 5 + commandContentLength);
+                    const responseText = commandContent.toString('ascii');
+                    
+                    // Check if response text contains expected patterns
+                    if (responseText.includes('HFYD=') || responseText.includes('DYD=') || 
+                        responseText.includes('Success') || responseText.includes('Fail') ||
+                        responseText.includes('Speed Limit') || responseText.includes('Unvalued Fix')) {
+                        console.log(`[PARSE] ✅ Parsed (Standard format): "${responseText}"`);
+                        return {
+                            protocolNumber: protocolNumber,
+                            responseText: responseText,
+                            packetLength: packetLength,
+                            commandLength: commandLength
+                        };
+                    }
+                }
             }
             
-            const infoContent = data.slice(4, 4 + infoContentLength);
-            
-            if (infoContent.length < 1) {
-                console.log(`[PARSE] ⚠️ InfoContent too short for ${TARGET_IMEI}: length=${infoContent.length}, hex=${data.toString('hex')}`);
-                return null;
-            }
-
-            // Parse Information Content structure:
-            // Command Length (1) + Server Flag Bit (4) + Command Content (variable) + Language (2) + Serial (2)
-            const commandLength = infoContent[0];
-            const serverFlagBit = infoContent.slice(1, 5); // 4 bytes
-            const commandContentLength = commandLength - 4; // Command Length includes Server Flag Bit (4 bytes)
-            
-            // Debug: Log packet structure for target IMEI
-            console.log(`[PARSE] 📦 Parsing GT06 response for ${TARGET_IMEI}: packetLength=${packetLength}, infoContentLength=${infoContentLength}, commandLength=${commandLength}, commandContentLength=${commandContentLength}, infoContent hex=${infoContent.toString('hex')}`);
-            
-            if (commandContentLength <= 0) {
-                console.log(`[PARSE] ⚠️ Invalid commandContentLength for ${TARGET_IMEI}: commandLength=${commandLength}, commandContentLength=${commandContentLength}`);
-                return null;
+            // Approach 2: Try extracting ASCII text from entire InfoContent
+            // Some devices might send response text directly without full structure
+            const asciiFromInfoContent = infoContent.toString('ascii');
+            if (asciiFromInfoContent.includes('HFYD=') || asciiFromInfoContent.includes('DYD=') ||
+                asciiFromInfoContent.includes('Success') || asciiFromInfoContent.includes('Fail') ||
+                asciiFromInfoContent.includes('Speed Limit') || asciiFromInfoContent.includes('Unvalued Fix')) {
+                console.log(`[PARSE] ✅ Parsed (Direct ASCII from InfoContent): "${asciiFromInfoContent}"`);
+                return {
+                    protocolNumber: protocolNumber,
+                    responseText: asciiFromInfoContent,
+                    packetLength: packetLength,
+                    commandLength: null
+                };
             }
             
-            if (infoContent.length < 5 + commandContentLength + 4) {
-                console.log(`[PARSE] ⚠️ InfoContent incomplete for ${TARGET_IMEI}: have=${infoContent.length}, need=${5 + commandContentLength + 4}, commandContentLength=${commandContentLength}`);
-                return null;
+            // Approach 3: Try extracting ASCII from entire packet (except start/stop)
+            // Response might be embedded differently
+            const dataContent = data.slice(4, data.length - 2); // Skip start (2) and stop (2)
+            const asciiFromPacket = dataContent.toString('ascii');
+            if (asciiFromPacket.includes('HFYD=') || asciiFromPacket.includes('DYD=') ||
+                asciiFromPacket.includes('Success') || asciiFromPacket.includes('Fail') ||
+                asciiFromPacket.includes('Speed Limit') || asciiFromPacket.includes('Unvalued Fix')) {
+                console.log(`[PARSE] ✅ Parsed (Direct ASCII from packet): "${asciiFromPacket}"`);
+                return {
+                    protocolNumber: protocolNumber,
+                    responseText: asciiFromPacket,
+                    packetLength: packetLength,
+                    commandLength: null
+                };
             }
-
-            // Extract Command Content (ASCII text response)
-            const commandContentStart = 5; // After Command Length (1) + Server Flag (4)
-            const commandContentEnd = commandContentStart + commandContentLength;
-            const commandContent = infoContent.slice(commandContentStart, commandContentEnd);
             
-            // Convert to ASCII string
-            const responseText = commandContent.toString('ascii');
+            // Approach 4: Check if this is just an acknowledgment packet (no text response)
+            // Some devices may send protocol 0x13/0x15 as acknowledgment without text
+            if (infoContent.length <= 5) {
+                console.log(`[PARSE] ⚠️ Small packet (${infoContent.length} bytes) - might be acknowledgment only, no text response`);
+                // Still return something to indicate packet was received
+                return {
+                    protocolNumber: protocolNumber,
+                    responseText: '', // Empty response text
+                    packetLength: packetLength,
+                    commandLength: null,
+                    isAcknowledgment: true
+                };
+            }
             
-            console.log(`[PARSE] ✅ Parsed GT06 response for ${TARGET_IMEI}: "${responseText}" (hex: ${commandContent.toString('hex')})`);
+            // If all approaches fail, log for analysis
+            console.log(`[PARSE] ❌ Could not extract response text from packet`);
+            console.log(`[PARSE]   InfoContent hex: ${infoContent.toString('hex')}`);
+            console.log(`[PARSE]   InfoContent ASCII: ${asciiFromInfoContent}`);
+            console.log(`[PARSE]   Full packet ASCII: ${asciiFromPacket}`);
             
-            return {
-                protocolNumber: protocolNumber,
-                responseText: responseText,
-                packetLength: packetLength,
-                commandLength: commandLength
-            };
+            return null;
         } catch (e) {
             // Parsing failed
             console.log(`[PARSE] ❌ Parse error for ${TARGET_IMEI}:`, e.message, `Hex: ${data.toString('hex')}`);
@@ -961,36 +1001,47 @@ class TCPService {
                 console.log(`[DETECT] ✅ Command response protocol detected (0x${protocolNumber.toString(16).padStart(2, '0')}) - parsing...`);
                 const parsed = this.parseGT06ResponsePacket(data);
                 
-                if (parsed && parsed.responseText) {
+                if (parsed) {
                     console.log(`[DEVICE RESPONSE] 📥 GT06 Protocol Response detected for IMEI ${imei}:`);
                     console.log(`[DEVICE RESPONSE] Protocol: 0x${protocolNumber.toString(16).padStart(2, '0')}`);
-                    console.log(`[DEVICE RESPONSE] Response Text: ${parsed.responseText}`);
                     console.log(`[DEVICE RESPONSE] Full Packet Hex: ${data.toString('hex')}`);
                     console.log(`[DEVICE RESPONSE] Packet Length: ${data.length} bytes`);
                     console.log(`[DEVICE RESPONSE] Timestamp: ${new Date().toISOString()}`);
                     
-                    // Parse specific responses
-                    const responseText = parsed.responseText;
-                    if (responseText.includes('HFYD=Success!')) {
-                        console.log(`[DEVICE RESPONSE] ✅ Relay ON command SUCCESSFUL - Oil/electricity connected`);
-                    } else if (responseText.includes('HFYD=Fail!')) {
-                        console.log(`[DEVICE RESPONSE] ❌ Relay ON command FAILED - Oil/electricity not connected`);
-                    } else if (responseText.includes('DYD=Success!')) {
-                        console.log(`[DEVICE RESPONSE] ✅ Relay OFF command SUCCESSFUL - Oil/electricity cut off`);
-                    } else if (responseText.includes('DYD=Unvalued Fix')) {
-                        console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - GPS fix not valid (Unvalued Fix)`);
-                    } else if (responseText.includes('DYD=Speed Limit')) {
-                        const speedMatch = responseText.match(/Speed Limit, Speed (\d+)km\/h/);
-                        if (speedMatch) {
-                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high: ${speedMatch[1]} km/h (must be < 20 km/h)`);
-                        } else {
-                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high (must be < 20 km/h)`);
-                        }
-                    } else {
-                        console.log(`[DEVICE RESPONSE] ⚠️ Unknown response format: ${responseText}`);
+                    // Handle acknowledgment-only packets (no text response)
+                    if (parsed.isAcknowledgment) {
+                        console.log(`[DEVICE RESPONSE] ✅ Command ACKNOWLEDGED by device (acknowledgment packet received)`);
+                        console.log(`[DEVICE RESPONSE] ℹ️ Note: Device sent acknowledgment but no text response - command may have been received`);
+                        return true;
                     }
                     
-                    return true;
+                    // Handle packets with response text
+                    if (parsed.responseText) {
+                        console.log(`[DEVICE RESPONSE] Response Text: ${parsed.responseText}`);
+                        
+                        // Parse specific responses
+                        const responseText = parsed.responseText;
+                        if (responseText.includes('HFYD=Success!')) {
+                            console.log(`[DEVICE RESPONSE] ✅ Relay ON command SUCCESSFUL - Oil/electricity connected`);
+                        } else if (responseText.includes('HFYD=Fail!')) {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay ON command FAILED - Oil/electricity not connected`);
+                        } else if (responseText.includes('DYD=Success!')) {
+                            console.log(`[DEVICE RESPONSE] ✅ Relay OFF command SUCCESSFUL - Oil/electricity cut off`);
+                        } else if (responseText.includes('DYD=Unvalued Fix')) {
+                            console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - GPS fix not valid (Unvalued Fix)`);
+                        } else if (responseText.includes('DYD=Speed Limit')) {
+                            const speedMatch = responseText.match(/Speed Limit, Speed (\d+)km\/h/);
+                            if (speedMatch) {
+                                console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high: ${speedMatch[1]} km/h (must be < 20 km/h)`);
+                            } else {
+                                console.log(`[DEVICE RESPONSE] ❌ Relay OFF command FAILED - Vehicle speed too high (must be < 20 km/h)`);
+                            }
+                        } else if (responseText.trim().length > 0) {
+                            console.log(`[DEVICE RESPONSE] ⚠️ Unknown response format: "${responseText}"`);
+                        }
+                        
+                        return true;
+                    }
                 } else {
                     console.log(`[DETECT] ❌ parseGT06ResponsePacket returned null - parsing failed`);
                 }
