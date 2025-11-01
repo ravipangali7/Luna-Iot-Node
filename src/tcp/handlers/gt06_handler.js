@@ -64,12 +64,10 @@ class GT06Handler {
             // Route based on device type
             if (deviceType === 'sos') {
                 const startTime = Date.now();
-                console.log(`[SOS STATUS] 🕐 START processing for IMEI: ${data.imei} at ${new Date().toISOString()}`);
                 
                 // Fetch latest status for comparison
                 const dbFetchStart = Date.now();
                 const latestStatus = await mysqlService.getLatestSosStatus(data.imei);
-                console.log(`[SOS STATUS] ⏱️ DB fetch took ${Date.now() - dbFetchStart}ms`);
                 
                 // Normalize incoming boolean to number: true -> 1, false -> 0
                 const currentIgnition = statusData.ignition === true ? 1 : 0;
@@ -93,33 +91,22 @@ class GT06Handler {
                 // Force insert if ignition changed
                 if (ignitionChanged) {
                     shouldInsert = true;
-                    console.log(`[SOS STATUS] ⚡ Ignition changed detected - forcing database save. Previous: ${previousIgnition}, Current: ${currentIgnition}`);
                 }
-                
-                console.log(`[SOS IGNITION CHECK] IMEI: ${data.imei}`);
-                console.log(`[SOS IGNITION CHECK] Raw incoming ignition (boolean):`, statusData.ignition, typeof statusData.ignition);
-                console.log(`[SOS IGNITION CHECK] Previous ignition from DB (number):`, latestStatus ? latestStatus.ignition : 'null', latestStatus ? typeof latestStatus.ignition : 'N/A');
-                console.log(`[SOS IGNITION CHECK] Normalized current ignition: ${currentIgnition} (type: ${typeof currentIgnition})`);
-                console.log(`[SOS IGNITION CHECK] Normalized previous ignition: ${previousIgnition} (type: ${typeof previousIgnition})`);
                 
                 // SAVE TO DATABASE FIRST (immediate, don't wait for alert_history)
                 const dbSaveStart = Date.now();
                 if (shouldInsert) {
                     // Status changed - insert new row
                     await mysqlService.insertSosStatus(statusData);
-                    console.log(`[SOS STATUS] 💾 Database INSERT completed in ${Date.now() - dbSaveStart}ms`);
                 } else {
                     // Status unchanged - update existing row's updated_at
                     await mysqlService.updateSosStatusTimestamp(latestStatus.id, nepalTime);
-                    console.log(`[SOS STATUS] 💾 Database UPDATE completed in ${Date.now() - dbSaveStart}ms`);
                 }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
-                console.log(`[SOS STATUS] ⏱️ Total processing time (including DB save): ${Date.now() - startTime}ms`);
 
                 // NOW check for alert_history creation (non-blocking, fire-and-forget)
                 // Check for transition: OFF (0) -> ON (1)
                 if (previousIgnition === 0 && currentIgnition === 1) {
-                    console.log(`[ALERT HISTORY] ⚡ Ignition transition detected: OFF (0) -> ON (1) for IMEI: ${data.imei}`);
                     
                     // Fire-and-forget: Don't await, process in background
                     (async () => {
