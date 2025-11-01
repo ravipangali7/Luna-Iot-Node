@@ -408,14 +408,17 @@ class TCPService {
 
     // Queue command for offline device
     queueCommand(imei, commandType, commandData, priority = 0) {
-        if (!imei) {
+        // Normalize IMEI to string for consistent lookup
+        const imeiStr = imei ? String(imei) : null;
+        
+        if (!imeiStr) {
             console.error('[COMMAND QUEUE] ❌ Cannot queue command: IMEI is required');
             return false;
         }
 
-        if (!this.commandQueue.has(imei)) {
-            this.commandQueue.set(imei, []);
-            if (imei === TARGET_IMEI) {
+        if (!this.commandQueue.has(imeiStr)) {
+            this.commandQueue.set(imeiStr, []);
+            if (imeiStr === TARGET_IMEI) {
                 console.log(`[IMEI: ${TARGET_IMEI}] Created new command queue`);
             }
         }
@@ -427,12 +430,19 @@ class TCPService {
             priority: priority
         };
 
-        this.commandQueue.get(imei).push(command);
-        const queueSize = this.commandQueue.get(imei).length;
+        this.commandQueue.get(imeiStr).push(command);
+        const queueSize = this.commandQueue.get(imeiStr).length;
         
         // Minimal queue log - only for target IMEI
-        if (imei === TARGET_IMEI) {
-            const commandName = commandType === 'RELAY' ? `RELAY ${commandData}` : commandType;
+        if (imeiStr === TARGET_IMEI) {
+            let commandName = commandType;
+            if (commandType === 'RELAY') {
+                // Extract command value from object or string
+                const commandValue = (typeof commandData === 'object' && commandData !== null) 
+                    ? (commandData.command || JSON.stringify(commandData))
+                    : commandData;
+                commandName = `RELAY ${commandValue}`;
+            }
             console.log(`[QUEUE] Command queued: ${commandName} (Queue: ${queueSize})`);
         }
         
@@ -441,27 +451,37 @@ class TCPService {
 
     // Process all queued commands for a device
     async processQueuedCommands(imei) {
+        // Normalize IMEI to string for consistent lookup
+        const imeiStr = imei ? String(imei) : null;
+        
         // Entry log - show ALL calls, especially useful when IMEI is null/undefined
-        if (!imei || imei === TARGET_IMEI) {
-            console.log(`[QUEUE] processQueuedCommands called - IMEI: ${imei || 'NULL'}, HasQueue: ${imei ? this.commandQueue.has(imei) : false}`);
+        if (!imeiStr || imeiStr === TARGET_IMEI) {
+            console.log(`[QUEUE] processQueuedCommands called - IMEI: ${imeiStr || 'NULL'}, IMEI type: ${typeof imei}, HasQueue: ${imeiStr ? this.commandQueue.has(imeiStr) : false}`);
+            
+            // Diagnostic: Show all queue keys for debugging type mismatch
+            if (imeiStr === TARGET_IMEI && this.commandQueue.size > 0) {
+                const queueKeys = Array.from(this.commandQueue.keys());
+                const matchingKeys = queueKeys.filter(k => String(k) === imeiStr);
+                console.log(`[QUEUE] Queue keys for debugging - Total queues: ${queueKeys.length}, Looking for: ${imeiStr}, Matching keys: ${matchingKeys.length}, Sample keys: ${queueKeys.slice(0, 3).map(k => `${k}(${typeof k})`).join(', ')}`);
+            }
         }
         
-        if (!imei || !this.commandQueue.has(imei)) {
+        if (!imeiStr || !this.commandQueue.has(imeiStr)) {
             // Minimal log - only for target IMEI
-            if (imei === TARGET_IMEI) {
-                console.log(`[QUEUE] Empty - no commands`);
+            if (imeiStr === TARGET_IMEI) {
+                console.log(`[QUEUE] Empty - no commands (checked IMEI: ${imeiStr})`);
             }
             return { processed: 0, failed: 0 };
         }
 
         // Find connection with retry logic for reliability
-        let connection = this.findConnectionByImei(imei);
+        let connection = this.findConnectionByImei(imeiStr);
         
         // Retry once if connection not found (might be timing issue)
         if (!connection || !connection.socket || connection.socket.destroyed) {
             // Small delay and retry
             await new Promise(resolve => setTimeout(resolve, 100));
-            connection = this.findConnectionByImei(imei);
+            connection = this.findConnectionByImei(imeiStr);
             
             if (!connection || !connection.socket || connection.socket.destroyed) {
                 // No log for retry failure - device simply not connected
@@ -471,23 +491,23 @@ class TCPService {
 
         // Verify socket is writable before processing
         if (!connection.socket.writable) {
-            if (imei === TARGET_IMEI) {
+            if (imeiStr === TARGET_IMEI) {
                 console.log(`[QUEUE] Socket not writable`);
             }
             return { processed: 0, failed: 0 };
         }
 
-        const commands = this.commandQueue.get(imei);
+        const commands = this.commandQueue.get(imeiStr);
         if (!commands || commands.length === 0) {
             // Minimal log - only for target IMEI
-            if (imei === TARGET_IMEI) {
+            if (imeiStr === TARGET_IMEI) {
                 console.log(`[QUEUE] Empty - no commands`);
             }
             return { processed: 0, failed: 0 };
         }
 
         // Minimal trigger log - only for target IMEI
-        if (imei === TARGET_IMEI) {
+        if (imeiStr === TARGET_IMEI) {
             console.log(`[QUEUE] Processing triggered (${commands.length} commands)`);
             // Diagnostic: Show queue contents
             commands.forEach((cmd, idx) => {
@@ -509,14 +529,14 @@ class TCPService {
         for (const cmd of commands) {
             try {
                 // Diagnostic: Log what we're trying to build
-                if (imei === TARGET_IMEI) {
+                if (imeiStr === TARGET_IMEI) {
                     console.log(`[QUEUE] Building buffer: Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}`);
                 }
                 
                 const commandBuffer = this.getCommandBuffer(cmd.commandType, cmd.commandData);
                 
                 // Diagnostic: Log getCommandBuffer result
-                if (imei === TARGET_IMEI) {
+                if (imeiStr === TARGET_IMEI) {
                     if (commandBuffer) {
                         console.log(`[QUEUE] Buffer created: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
                     } else {
@@ -527,7 +547,7 @@ class TCPService {
                 if (commandBuffer) {
                     // Verify socket is still writable before each command
                     if (!connection.socket.writable || connection.socket.destroyed) {
-                        if (imei === TARGET_IMEI) {
+                        if (imeiStr === TARGET_IMEI) {
                             console.log(`[QUEUE] Socket unwritable - stopped`);
                         }
                         break;
@@ -535,7 +555,7 @@ class TCPService {
                     
                     // Write with callback for confirmation
                     connection.socket.write(commandBuffer, (error) => {
-                        if (error && imei === TARGET_IMEI) {
+                        if (error && imeiStr === TARGET_IMEI) {
                             console.log(`[QUEUE] Send failed: ${cmd.commandType}`);
                         }
                     });
@@ -543,19 +563,23 @@ class TCPService {
                     processed++;
                     
                     // Minimal send log - only for target IMEI
-                    if (imei === TARGET_IMEI) {
-                        const commandName = cmd.commandType === 'RELAY' ? `RELAY ${cmd.commandData}` : cmd.commandType;
+                    if (imeiStr === TARGET_IMEI) {
+                        // Extract command value from object or string
+                        const commandValue = (typeof cmd.commandData === 'object' && cmd.commandData !== null) 
+                            ? (cmd.commandData.command || JSON.stringify(cmd.commandData))
+                            : cmd.commandData;
+                        const commandName = cmd.commandType === 'RELAY' ? `RELAY ${commandValue}` : cmd.commandType;
                         console.log(`[QUEUE] Sending: ${commandName}`);
                     }
                 } else {
                     // Log when getCommandBuffer returns null
-                    if (imei === TARGET_IMEI) {
+                    if (imeiStr === TARGET_IMEI) {
                         console.log(`[QUEUE] ❌ Command failed - getCommandBuffer returned null for Type=${cmd.commandType}, Data=${JSON.stringify(cmd.commandData)}`);
                     }
                     failed++;
                 }
             } catch (error) {
-                if (imei === TARGET_IMEI) {
+                if (imeiStr === TARGET_IMEI) {
                     console.log(`[QUEUE] ❌ Exception: ${error.message}`);
                 }
                 failed++;
@@ -563,10 +587,10 @@ class TCPService {
         }
 
         // Clear processed commands
-        this.clearQueuedCommands(imei);
+        this.clearQueuedCommands(imeiStr);
 
         // Minimal completion log - only for target IMEI
-        if (imei === TARGET_IMEI) {
+        if (imeiStr === TARGET_IMEI) {
             if (processed > 0 || failed > 0) {
                 console.log(`[QUEUE] Completed: ${processed} sent, ${failed} failed`);
             }
@@ -596,9 +620,11 @@ class TCPService {
 
     // Clear queued commands for a device
     clearQueuedCommands(imei) {
-        if (imei && this.commandQueue.has(imei)) {
-            this.commandQueue.delete(imei);
-            console.log(`Cleared command queue for device ${imei}`);
+        // Normalize IMEI to string for consistent lookup
+        const imeiStr = imei ? String(imei) : null;
+        if (imeiStr && this.commandQueue.has(imeiStr)) {
+            this.commandQueue.delete(imeiStr);
+            console.log(`Cleared command queue for device ${imeiStr}`);
         }
     }
 

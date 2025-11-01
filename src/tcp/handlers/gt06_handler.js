@@ -67,6 +67,11 @@ class GT06Handler {
             if ((socket.deviceImei === TARGET_IMEI || msg.imei === TARGET_IMEI) && msg.event) {
                 console.log(`[IMEI: ${TARGET_IMEI}] 📨 Processing message - Type: ${msg.event.string}, Timestamp: ${new Date().toISOString()}`);
             }
+            
+            // Diagnostic log: Show IMEI values before handleData is called (for target IMEI)
+            if (socket.deviceImei === TARGET_IMEI || msg.imei === TARGET_IMEI) {
+                console.log(`[QUEUE] Before handleData - socket.deviceImei: ${socket.deviceImei || 'NULL'}, msg.imei: ${msg.imei || 'NULL'}, msg.imei type: ${typeof msg.imei}`);
+            }
 
             this.handleData(msg, socket);
 
@@ -79,6 +84,11 @@ class GT06Handler {
         // Log data processing start for target IMEI
         if (data.imei === TARGET_IMEI) {
             console.log(`[IMEI: ${TARGET_IMEI}] 🔄 Processing data - Event: ${data.event?.string || 'Unknown'}, Timestamp: ${new Date().toISOString()}`);
+        }
+        
+        // Diagnostic log: Show IMEI values at start of handleData (for target IMEI)
+        if (data.imei === TARGET_IMEI || socket.deviceImei === TARGET_IMEI) {
+            console.log(`[QUEUE] At handleData start - data.imei: ${data.imei || 'NULL'}, data.imei type: ${typeof data.imei}, socket.deviceImei: ${socket.deviceImei || 'NULL'}, socket.deviceImei type: ${typeof socket.deviceImei}`);
         }
         
         const device = await mysqlService.getDeviceByImei(data.imei);
