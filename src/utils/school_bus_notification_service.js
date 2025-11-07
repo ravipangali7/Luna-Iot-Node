@@ -43,31 +43,21 @@ class SchoolBusNotificationService {
      */
     static async checkSchoolBusProximityAndNotify(imei, vehicleLat, vehicleLon) {
         try {
-            console.log(`[SchoolBus Service] Starting proximity check for IMEI: ${imei}, Vehicle Location: ${vehicleLat}, ${vehicleLon}`);
-            
             // Get all school parents associated with this school bus
             const parents = await mysqlService.getSchoolBusParentsByImei(imei);
 
             if (parents.length === 0) {
-                console.log(`[SchoolBus Service] No parents found for IMEI: ${imei} - Not a school bus or no parents associated`);
                 return;
             }
-
-            console.log(`[SchoolBus Service] Found ${parents.length} parent(s) associated with school bus IMEI: ${imei}`);
 
             const RADIUS_KM = 1.0; // 1 kilometer radius
             const parentsToNotify = [];
 
             // Check distance for each parent
             for (const parent of parents) {
-                console.log(`[SchoolBus Service] Checking parent ID: ${parent.id}, Name: ${parent.name}`);
-                
                 if (!parent.latitude || !parent.longitude) {
-                    console.log(`[SchoolBus Service] Skipping parent ${parent.id} - missing location data (lat: ${parent.latitude}, lon: ${parent.longitude})`);
                     continue; // Skip if parent location is not set
                 }
-
-                console.log(`[SchoolBus Service] Parent ${parent.id} location: ${parent.latitude}, ${parent.longitude}`);
 
                 const distance = this.calculateDistance(
                     vehicleLat,
@@ -75,8 +65,6 @@ class SchoolBusNotificationService {
                     parent.latitude,
                     parent.longitude
                 );
-
-                console.log(`[SchoolBus Service] Distance from parent ${parent.id} (${parent.name}): ${distance.toFixed(3)} km`);
 
                 // Check if within 1km radius
                 const isCurrentlyInside = distance <= RADIUS_KM;
@@ -90,9 +78,6 @@ class SchoolBusNotificationService {
                     // First time checking - notify if inside
                     if (isCurrentlyInside) {
                         shouldNotify = true;
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - First check: inside radius, will notify`);
-                    } else {
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - First check: outside radius, no notification`);
                     }
                 } else {
                     // Check state transition
@@ -101,16 +86,6 @@ class SchoolBusNotificationService {
                     if (!wasInside && isCurrentlyInside) {
                         // Transition: Outside → Inside (entering radius)
                         shouldNotify = true;
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - State change: Entering radius, will notify`);
-                    } else if (wasInside && isCurrentlyInside) {
-                        // Still inside - don't notify again (prevent spam)
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - Still inside radius, skipping notification (already notified)`);
-                    } else if (wasInside && !isCurrentlyInside) {
-                        // Transition: Inside → Outside (leaving radius)
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - State change: Leaving radius, no notification`);
-                    } else {
-                        // Still outside - no notification
-                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - Still outside radius, no notification`);
                     }
                 }
                 
@@ -129,25 +104,15 @@ class SchoolBusNotificationService {
                 }
             }
 
-            console.log(`[SchoolBus Service] Total parents to notify: ${parentsToNotify.length}`);
-
             // Send notifications to parents within radius
             if (parentsToNotify.length > 0) {
-                console.log(`[SchoolBus Service] Preparing to send notifications to ${parentsToNotify.length} parent(s)`);
-                
                 for (const parent of parentsToNotify) {
-                    // Determine title prefix (Mr/Mrs)
-                    const titlePrefix = this.getTitlePrefix(parent.name);
-                    const title = 'School Bus Arrival';
-                    const message = `${titlePrefix} ${parent.name} your child is arrives from school through school bus near you on your area`;
-
-                    console.log(`[SchoolBus Service] Sending notification to parent ${parent.id} (${parent.name})`);
-                    console.log(`[SchoolBus Service] Notification details - Title: ${title}, Message: ${message}`);
-                    console.log(`[SchoolBus Service] FCM Token: ${parent.fcm_token ? parent.fcm_token.substring(0, 20) + '...' : 'MISSING'}`);
+                    const title = 'School Bus Alert';
+                    const message = `${parent.name} जी स्कूल बस तपाइको घर नजिक आइपुग्यो |`;
 
                     try {
                         // Convert all data values to strings (Firebase requirement)
-                        const result = await firebaseService.sendNotificationToSingleUser(
+                        await firebaseService.sendNotificationToSingleUser(
                             parent.fcm_token,
                             title,
                             message,
@@ -161,44 +126,15 @@ class SchoolBusNotificationService {
                                 distance: String(parent.distance.toFixed(2))
                             }
                         );
-                        console.log(`[SchoolBus Service] Notification sent successfully to parent ${parent.id}:`, result);
                     } catch (error) {
-                        console.error(`[SchoolBus Service] Error sending notification to parent ${parent.id}:`, error);
+                        // Silently handle notification errors
                     }
                 }
-
-                console.log(`[SchoolBus Service] ✅ School bus proximity notifications sent to ${parentsToNotify.length} parent(s) for IMEI: ${imei}`);
-            } else {
-                console.log(`[SchoolBus Service] No parents within ${RADIUS_KM}km radius for IMEI: ${imei}`);
             }
 
         } catch (error) {
-            console.error('[SchoolBus Service] ❌ Error checking school bus proximity:', error);
-            console.error('[SchoolBus Service] Error stack:', error.stack);
+            // Silently handle errors
         }
-    }
-
-    /**
-     * Determine title prefix (Mr/Mrs) based on name
-     * Simple heuristic: if name contains common female titles/names, use Mrs, otherwise Mr
-     */
-    static getTitlePrefix(name) {
-        if (!name) {
-            return 'Mr/Mrs';
-        }
-
-        const nameLower = name.toLowerCase();
-        // Common patterns that might indicate female (this is a simple heuristic)
-        const femaleIndicators = ['mrs', 'miss', 'ms', 'kumari', 'devi'];
-        
-        for (const indicator of femaleIndicators) {
-            if (nameLower.includes(indicator)) {
-                return 'Mrs';
-            }
-        }
-
-        // Default to Mr if no female indicators found
-        return 'Mr';
     }
 
     /**

@@ -386,19 +386,7 @@ class MySQLService {
                 AND sp.latitude IS NOT NULL
                 AND sp.longitude IS NOT NULL
         `;
-        console.log(`[SchoolBus DB] Querying parents for IMEI: ${imei}`);
-        const results = await this.query(sql, [imei]);
-        console.log(`[SchoolBus DB] Found ${results.length} parent(s) for IMEI: ${imei}`);
-        if (results.length > 0) {
-            console.log(`[SchoolBus DB] Parents data:`, results.map(p => ({
-                id: p.id,
-                name: p.name,
-                hasFcmToken: !!p.fcm_token,
-                lat: p.latitude,
-                lon: p.longitude
-            })));
-        }
-        return results;
+        return this.query(sql, [imei]);
     }
 }
 
