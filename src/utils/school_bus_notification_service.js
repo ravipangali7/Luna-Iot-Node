@@ -2,6 +2,9 @@ const mysqlService = require('../database/mysql');
 const firebaseService = require('./firebase_service');
 
 class SchoolBusNotificationService {
+    // In-memory cache to track notification state for each parent-IMEI pair
+    // Key format: `${imei}_${parentId}`, Value: { isInside: boolean, lastCheckTime: timestamp }
+    static notificationStateCache = new Map();
     
     /**
      * Calculate distance between two points using Haversine formula
@@ -75,15 +78,54 @@ class SchoolBusNotificationService {
 
                 console.log(`[SchoolBus Service] Distance from parent ${parent.id} (${parent.name}): ${distance.toFixed(3)} km`);
 
-                // If within 1km radius, add to notification list
-                if (distance <= RADIUS_KM) {
-                    console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) is within ${RADIUS_KM}km radius - adding to notification list`);
+                // Check if within 1km radius
+                const isCurrentlyInside = distance <= RADIUS_KM;
+                const cacheKey = `${imei}_${parent.id}`;
+                const lastState = this.notificationStateCache.get(cacheKey);
+                
+                // Determine if we should notify (only when entering the radius, not when already inside)
+                let shouldNotify = false;
+                
+                if (!lastState) {
+                    // First time checking - notify if inside
+                    if (isCurrentlyInside) {
+                        shouldNotify = true;
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - First check: inside radius, will notify`);
+                    } else {
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - First check: outside radius, no notification`);
+                    }
+                } else {
+                    // Check state transition
+                    const wasInside = lastState.isInside;
+                    
+                    if (!wasInside && isCurrentlyInside) {
+                        // Transition: Outside → Inside (entering radius)
+                        shouldNotify = true;
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - State change: Entering radius, will notify`);
+                    } else if (wasInside && isCurrentlyInside) {
+                        // Still inside - don't notify again (prevent spam)
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - Still inside radius, skipping notification (already notified)`);
+                    } else if (wasInside && !isCurrentlyInside) {
+                        // Transition: Inside → Outside (leaving radius)
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - State change: Leaving radius, no notification`);
+                    } else {
+                        // Still outside - no notification
+                        console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) - Still outside radius, no notification`);
+                    }
+                }
+                
+                // Update cache with current state
+                this.notificationStateCache.set(cacheKey, {
+                    isInside: isCurrentlyInside,
+                    lastCheckTime: Date.now()
+                });
+                
+                // Add to notification list if should notify
+                if (shouldNotify) {
                     parentsToNotify.push({
                         ...parent,
                         distance: distance
                     });
-                } else {
-                    console.log(`[SchoolBus Service] Parent ${parent.id} (${parent.name}) is outside ${RADIUS_KM}km radius - skipping`);
                 }
             }
 
@@ -104,18 +146,19 @@ class SchoolBusNotificationService {
                     console.log(`[SchoolBus Service] FCM Token: ${parent.fcm_token ? parent.fcm_token.substring(0, 20) + '...' : 'MISSING'}`);
 
                     try {
+                        // Convert all data values to strings (Firebase requirement)
                         const result = await firebaseService.sendNotificationToSingleUser(
                             parent.fcm_token,
                             title,
                             message,
                             {
                                 type: 'school_bus_proximity',
-                                imei: imei,
-                                vehicleLat: vehicleLat,
-                                vehicleLon: vehicleLon,
-                                parentLat: parent.latitude,
-                                parentLon: parent.longitude,
-                                distance: parent.distance.toFixed(2)
+                                imei: String(imei),
+                                vehicleLat: String(vehicleLat),
+                                vehicleLon: String(vehicleLon),
+                                parentLat: String(parent.latitude),
+                                parentLon: String(parent.longitude),
+                                distance: String(parent.distance.toFixed(2))
                             }
                         );
                         console.log(`[SchoolBus Service] Notification sent successfully to parent ${parent.id}:`, result);
@@ -157,7 +200,27 @@ class SchoolBusNotificationService {
         // Default to Mr if no female indicators found
         return 'Mr';
     }
+
+    /**
+     * Clean up old cache entries (older than 24 hours) to prevent memory leaks
+     * This can be called periodically or on startup
+     */
+    static cleanupCache() {
+        const now = Date.now();
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        
+        for (const [key, value] of this.notificationStateCache.entries()) {
+            if (now - value.lastCheckTime > maxAge) {
+                this.notificationStateCache.delete(key);
+            }
+        }
+    }
 }
+
+// Cleanup cache every hour
+setInterval(() => {
+    SchoolBusNotificationService.cleanupCache();
+}, 60 * 60 * 1000); // 1 hour
 
 module.exports = SchoolBusNotificationService;
 
