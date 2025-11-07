@@ -4,6 +4,7 @@ const socketService = require('../../socket/socket_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
 const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
+const SchoolBusNotificationService = require('../../utils/school_bus_notification_service');
 
 class GT06Handler {
 
@@ -305,6 +306,9 @@ class GT06Handler {
 
                 // Check geofences for this location
                 geofenceService.checkGeofenceForLocation(data.imei, locationData.latitude, locationData.longitude);
+
+                // Check school bus proximity to parents and send notifications
+                SchoolBusNotificationService.checkSchoolBusProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
             }
         } else if (data.event.string === 'login') {
             socketService.deviceMonitoringMessage('login', data.imei, null, null);

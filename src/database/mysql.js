@@ -361,6 +361,33 @@ class MySQLService {
         ];
         return this.query(sql, params);
     }
+
+    // ==================== SCHOOL BUS PARENT METHODS ====================
+
+    async getSchoolBusParentsByImei(imei) {
+        const sql = `
+            SELECT 
+                u.id, 
+                u.name, 
+                u.fcm_token, 
+                sp.latitude, 
+                sp.longitude
+            FROM vehicles v
+            INNER JOIN school_buses sb ON sb.bus_id = v.id
+            INNER JOIN school_parents_school_buses spsb ON spsb.schoolbus_id = sb.id
+            INNER JOIN school_parents sp ON sp.id = spsb.schoolparent_id
+            INNER JOIN users u ON u.id = sp.parent_id
+            WHERE v.imei = ? 
+                AND v.vehicle_type = 'SchoolBus'
+                AND v.is_active = 1
+                AND u.is_active = 1
+                AND u.fcm_token IS NOT NULL 
+                AND u.fcm_token != ''
+                AND sp.latitude IS NOT NULL
+                AND sp.longitude IS NOT NULL
+        `;
+        return this.query(sql, [imei]);
+    }
 }
 
 module.exports = new MySQLService();
