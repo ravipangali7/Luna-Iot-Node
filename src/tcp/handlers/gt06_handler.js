@@ -308,6 +308,7 @@ class GT06Handler {
                 geofenceService.checkGeofenceForLocation(data.imei, locationData.latitude, locationData.longitude);
 
                 // Check school bus proximity to parents and send notifications
+                console.log(`[SchoolBus] Checking proximity for IMEI: ${data.imei}, Lat: ${locationData.latitude}, Lon: ${locationData.longitude}`);
                 SchoolBusNotificationService.checkSchoolBusProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
             }
         } else if (data.event.string === 'login') {
