@@ -39,6 +39,51 @@ class TCPService {
         return connection && connection.socket && !connection.socket.destroyed;
     }
 
+    // Immediately register device IMEI when login happens
+    // This ensures IMEI is available synchronously during login processing
+    registerDeviceImei(imei, socket) {
+        try {
+            const imeiStr = imei.toString();
+            
+            // Find connection by socket
+            let foundConnection = null;
+            let foundConnectionId = null;
+            
+            for (const [connectionId, connectionData] of this.connections) {
+                if (connectionData.socket === socket) {
+                    foundConnection = connectionData;
+                    foundConnectionId = connectionId;
+                    break;
+                }
+            }
+            
+            if (!foundConnection) {
+                console.warn(`registerDeviceImei: Connection not found for socket when registering IMEI ${imeiStr}`);
+                return false;
+            }
+            
+            // Remove old IMEI mapping if this socket was previously mapped to a different IMEI
+            if (foundConnection.deviceImei && foundConnection.deviceImei !== imeiStr) {
+                const oldImei = foundConnection.deviceImei;
+                this.deviceImeiMap.delete(oldImei);
+                console.log(`registerDeviceImei: Removed old IMEI mapping ${oldImei} for connection ${foundConnectionId}`);
+            }
+            
+            // Update connection data with IMEI
+            foundConnection.deviceImei = imeiStr;
+            
+            // Immediately update IMEI mapping
+            this.deviceImeiMap.set(imeiStr, foundConnectionId);
+            
+            console.log(`registerDeviceImei: Immediately registered IMEI ${imeiStr} for connection ${foundConnectionId}`);
+            
+            return true;
+        } catch (error) {
+            console.error(`registerDeviceImei: Error registering IMEI ${imei}:`, error);
+            return false;
+        }
+    }
+
     // Send relay command to device
     async sendRelayCommand(imei, command) {
         try {

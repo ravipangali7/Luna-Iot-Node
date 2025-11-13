@@ -1,6 +1,7 @@
 const Gt06 = require('gt06x22')
 const mysqlService = require('../../database/mysql');
 const socketService = require('../../socket/socket_service');
+const tcpService = require('../../tcp/tcp_service');
 const GT06NotificationService = require('../../utils/gt06_notification_service');
 const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
@@ -27,7 +28,14 @@ class GT06Handler {
 
         gt06.msgBuffer.forEach(msg => {
             if (msg.event && msg.event.string === 'login' && msg.imei) {
-                socket.deviceImei = msg.imei;
+                const imei = msg.imei.toString();
+                socket.deviceImei = imei;
+                
+                // Immediately register IMEI in tcpService to ensure it's available right away
+                // This matches the guide example's direct devices[imei] = client approach
+                tcpService.registerDeviceImei(imei, socket);
+                
+                console.log(`GT06Handler: Device logged in with IMEI ${imei} - immediately registered in tcpService`);
             } else {
                 msg.imei = socket.deviceImei || 'Unknown';
             }
