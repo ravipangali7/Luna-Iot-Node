@@ -105,7 +105,15 @@ app.post('/api/relay-command', async (req, res) => {
                 command: normalizedCommand
             });
         } else {
-            return res.status(500).json({
+            // Check if device is not connected - return 404 instead of 500
+            const isDeviceNotConnected = result.error && (
+                result.error.includes('Device not connected') || 
+                result.error.includes('Socket connection invalid')
+            );
+            
+            const statusCode = isDeviceNotConnected ? 404 : 500;
+            
+            return res.status(statusCode).json({
                 success: false,
                 message: result.error || 'Failed to send relay command',
                 imei: imei,
