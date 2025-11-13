@@ -49,7 +49,10 @@ class DataHandler {
         // If we have a relay response or status message, process it and skip npm parser
         if (relayResponseMsg || relayStatusMsg) {
             const msgToProcess = relayResponseMsg || relayStatusMsg;
-            gt06_handler.processRelayMessage(msgToProcess, imei);
+            // Process relay message asynchronously (it updates database and sends Socket.IO)
+            gt06_handler.processRelayMessage(msgToProcess, imei).catch(err => {
+                console.error('Error processing relay message:', err);
+            });
             return; // Skip npm parser for relay messages
         }
         

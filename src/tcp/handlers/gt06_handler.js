@@ -601,8 +601,86 @@ function parseRelayStatusMessage(data, imei) {
     };
 }
 
+// Helper function to update relay state in database
+async function updateRelayStateInDatabase(imei, relayState) {
+    try {
+        // Get device info to determine device type
+        const device = await mysqlService.getDeviceByImei(imei);
+        if (!device) {
+            console.warn(`updateRelayStateInDatabase: Device not found for IMEI ${imei}`);
+            return null;
+        }
+        
+        const deviceType = device.type || 'gps';
+        const nepalTime = datetimeService.getNepalDateTime(new Date());
+        
+        let latestStatus = null;
+        let statusData = null;
+        
+        // Get latest status from appropriate table based on device type
+        if (deviceType === 'buzzer') {
+            latestStatus = await mysqlService.getLatestBuzzerStatus(imei);
+            if (latestStatus) {
+                statusData = {
+                    deviceId: device.imei,
+                    imei: imei,
+                    battery: latestStatus.battery,
+                    signal: latestStatus.signal,
+                    ignition: latestStatus.ignition,
+                    charging: latestStatus.charging,
+                    relay: relayState ? 1 : 0, // Convert boolean to number
+                    createdAt: nepalTime
+                };
+                await mysqlService.insertBuzzerStatus(statusData);
+            }
+        } else if (deviceType === 'sos') {
+            latestStatus = await mysqlService.getLatestSosStatus(imei);
+            if (latestStatus) {
+                statusData = {
+                    deviceId: device.imei,
+                    imei: imei,
+                    battery: latestStatus.battery,
+                    signal: latestStatus.signal,
+                    ignition: latestStatus.ignition,
+                    charging: latestStatus.charging,
+                    relay: relayState ? 1 : 0, // Convert boolean to number
+                    createdAt: nepalTime
+                };
+                await mysqlService.insertSosStatus(statusData);
+            }
+        } else {
+            // Default to GPS device (status table)
+            latestStatus = await mysqlService.getLatestStatus(imei);
+            if (latestStatus) {
+                statusData = {
+                    deviceId: device.imei,
+                    imei: imei,
+                    battery: latestStatus.battery,
+                    signal: latestStatus.signal,
+                    ignition: latestStatus.ignition,
+                    charging: latestStatus.charging,
+                    relay: relayState ? 1 : 0, // Convert boolean to number
+                    createdAt: nepalTime
+                };
+                await mysqlService.insertStatus(statusData);
+            }
+        }
+        
+        if (statusData) {
+            console.log(`Updated relay state in database for ${imei} (${deviceType}): ${relayState ? 'ON' : 'OFF'}`);
+            return statusData;
+        } else {
+            console.warn(`updateRelayStateInDatabase: No latest status found for IMEI ${imei}, cannot update relay state`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`updateRelayStateInDatabase: Error updating relay state for ${imei}:`, error);
+        return null;
+    }
+}
+
 // Process relay message and update device status
-function processRelayMessage(msg, imei) {
+async function processRelayMessage(msg, imei) {
     if (!msg) return;
     
     // Initialize device status if not exists
@@ -651,6 +729,21 @@ function processRelayMessage(msg, imei) {
                 deviceStatus[imei].relayState = isOn;
                 deviceStatus[imei].lastUpdate = Date.now();
                 console.log('Updated relay state for', imei, 'to:', isOn ? 'ON' : 'OFF');
+                
+                // Update database and send Socket.IO update
+                const statusData = await updateRelayStateInDatabase(imei, isOn);
+                if (statusData) {
+                    // Send status update to frontend via Socket.IO
+                    socketService.statusUpdateMessage(
+                        imei,
+                        statusData.battery,
+                        statusData.signal,
+                        statusData.ignition,
+                        statusData.charging,
+                        statusData.relay,
+                        statusData.createdAt
+                    );
+                }
             }
         }
     }
@@ -667,6 +760,21 @@ function processRelayMessage(msg, imei) {
             deviceStatus[imei].relayState = msg.relayState;
             deviceStatus[imei].lastUpdate = now;
             console.log('Updated relay state from 7979 status message for', imei, 'to:', msg.relayState ? 'ON' : 'OFF');
+            
+            // Update database and send Socket.IO update
+            const statusData = await updateRelayStateInDatabase(imei, msg.relayState);
+            if (statusData) {
+                // Send status update to frontend via Socket.IO
+                socketService.statusUpdateMessage(
+                    imei,
+                    statusData.battery,
+                    statusData.signal,
+                    statusData.ignition,
+                    statusData.charging,
+                    statusData.relay,
+                    statusData.createdAt
+                );
+            }
         }
     }
 }
