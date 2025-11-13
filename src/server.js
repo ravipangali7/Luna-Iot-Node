@@ -1,4 +1,5 @@
 const tcp = require('./tcp/tcp_listener');
+const tcpService = require('./tcp/tcp_service');
 const mysqlService = require('./database/mysql');
 const socketService = require('./socket/socket_service');
 const GT06NotificationService = require('./utils/gt06_notification_service');
@@ -56,6 +57,64 @@ app.post('/api/alert-notification', (req, res) => {
         
     } catch (error) {
         console.error('Error in alert notification endpoint:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// Relay command endpoint
+app.post('/api/relay-command', async (req, res) => {
+    try {
+        const { imei, command } = req.body;
+        
+        if (!imei) {
+            return res.status(400).json({
+                success: false,
+                message: 'IMEI is required'
+            });
+        }
+        
+        if (!command) {
+            return res.status(400).json({
+                success: false,
+                message: 'Command is required. Use "on" or "off"'
+            });
+        }
+        
+        // Normalize command to lowercase
+        const normalizedCommand = String(command).toLowerCase();
+        
+        if (normalizedCommand !== 'on' && normalizedCommand !== 'off' && normalizedCommand !== '1' && normalizedCommand !== '0') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid command. Use "on", "off", "1", or "0"'
+            });
+        }
+        
+        // Send relay command via TCP
+        const result = await tcpService.sendRelayCommand(imei, normalizedCommand);
+        
+        if (result.success) {
+            return res.json({
+                success: true,
+                message: `Relay ${normalizedCommand.toUpperCase()} command sent successfully`,
+                imei: imei,
+                command: normalizedCommand
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                message: result.error || 'Failed to send relay command',
+                imei: imei,
+                command: normalizedCommand
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error in relay command endpoint:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
