@@ -35,7 +35,6 @@ class GT06Handler {
                 // This matches the guide example's direct devices[imei] = client approach
                 tcpService.registerDeviceImei(imei, socket);
                 
-                console.log(`GT06Handler: Device logged in with IMEI ${imei} - immediately registered in tcpService`);
             } else {
                 msg.imei = socket.deviceImei || 'Unknown';
             }

@@ -75,7 +75,6 @@ class TCPService {
             // Immediately update IMEI mapping
             this.deviceImeiMap.set(imeiStr, foundConnectionId);
             
-            console.log(`registerDeviceImei: Immediately registered IMEI ${imeiStr} for connection ${foundConnectionId}`);
             
             return true;
         } catch (error) {
