@@ -519,11 +519,47 @@ function parseRelayStatusMessage(data, imei) {
             
             console.log('7979 status message ASCII:', str);
             
-            // Parse DYD value (DYD=01 means ON, DYD=00 means OFF)
+            // First try to parse DYD value (DYD=01 means ON, DYD=00 means OFF)
             const dydMatch = str.match(/DYD=(\d+)/);
             if (dydMatch) {
                 relayState = dydMatch[1] === '01';
                 console.log('Parsed relay state from DYD:', dydMatch[1], '-> Relay:', relayState ? 'ON' : 'OFF');
+            } else {
+                // DYD pattern not found - try to parse from message text
+                // Only parse if message contains success indicators
+                const hasSuccess = str.toLowerCase().includes('success') || 
+                                  str.toLowerCase().includes('succeed') ||
+                                  str.toLowerCase().includes('completed');
+                
+                if (hasSuccess) {
+                    const lowerStr = str.toLowerCase();
+                    
+                    // Check for "cut off" or "cutoff" = Relay ON (Cut Fuel)
+                    if (lowerStr.includes('cut off') || lowerStr.includes('cutoff') || lowerStr.includes('cut-off')) {
+                        relayState = true; // Relay ON = Cut Fuel
+                        console.log('Parsed relay state from message text: "Cut off" -> Relay: ON');
+                    }
+                    // Check for "restore" = Relay OFF (Restore Fuel)
+                    else if (lowerStr.includes('restore')) {
+                        relayState = false; // Relay OFF = Restore Fuel
+                        console.log('Parsed relay state from message text: "Restore" -> Relay: OFF');
+                    }
+                    // Check for explicit "on" or "off" in message
+                    else if (lowerStr.includes(' relay on') || lowerStr.includes('relay: on') || lowerStr.includes('relay is on')) {
+                        relayState = true;
+                        console.log('Parsed relay state from message text: "ON" -> Relay: ON');
+                    }
+                    else if (lowerStr.includes(' relay off') || lowerStr.includes('relay: off') || lowerStr.includes('relay is off')) {
+                        relayState = false;
+                        console.log('Parsed relay state from message text: "OFF" -> Relay: OFF');
+                    }
+                    
+                    if (relayState === null) {
+                        console.log('Could not determine relay state from message text:', str);
+                    }
+                } else {
+                    console.log('Message does not contain success indicators, skipping relay state parsing');
+                }
             }
         }
     } catch (error) {
