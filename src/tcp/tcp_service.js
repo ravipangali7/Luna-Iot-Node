@@ -52,22 +52,33 @@ class TCPService {
                 return { success: false, error: 'Socket connection invalid' };
             }
 
-            // Build relay command based on your GT06 protocol
-            let relayCommand;
-            if (command === 'ON') {
-                relayCommand = Buffer.from('HFYD#\n'); // Your ON command
-            } else if (command === 'OFF') {
-                relayCommand = Buffer.from('DYD#\n');  // Your OFF command
+            // Working relay commands from GT06 protocol guide
+            // ON: "Relay,1#" = Cut Fuel (Relay ON = Relay 1)
+            // OFF: "Relay,0#" = Restore Fuel (Relay OFF = Relay 0)
+            const WORKING_RELAY_COMMANDS = {
+                on: "787814800c0000000052656c61792c312300020000f59f0d0a",   // Relay ON
+                off: "787814800c0000000052656c61792c302300020000f1b40d0a"  // Relay OFF
+            };
+
+            // Normalize command to lowercase
+            const normalizedCommand = String(command).toLowerCase();
+            
+            let relayCommandHex;
+            if (normalizedCommand === 'on' || normalizedCommand === '1') {
+                relayCommandHex = WORKING_RELAY_COMMANDS.on;
+            } else if (normalizedCommand === 'off' || normalizedCommand === '0') {
+                relayCommandHex = WORKING_RELAY_COMMANDS.off;
             } else {
-                throw new Error(`Invalid relay command: ${command}`);
+                throw new Error(`Invalid relay command: ${command}. Use 'on'/'off' or '1'/'0'`);
             }
             
-            // Send command to device
+            // Convert hex string to Buffer and send command to device
+            const relayCommand = Buffer.from(relayCommandHex, 'hex');
             connection.socket.write(relayCommand);
             
-            console.log(`Relay command sent to device ${imei}: ${command}`);
+            console.log(`Relay command sent to device ${imei}: ${normalizedCommand.toUpperCase()} (${normalizedCommand === 'on' || normalizedCommand === '1' ? 'Cut Fuel' : 'Restore Fuel'})`);
             
-            return { success: true, command: command };
+            return { success: true, command: normalizedCommand };
             
         } catch (error) {
             console.error(`Error sending relay command to device ${imei}:`, error);

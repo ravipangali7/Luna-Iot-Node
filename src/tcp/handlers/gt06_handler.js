@@ -6,6 +6,9 @@ const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
 const SchoolBusNotificationService = require('../../utils/school_bus_notification_service');
 
+// Device status map to track relay state per IMEI
+const deviceStatus = {};
+
 class GT06Handler {
 
     constructor(data, socket) {
@@ -51,6 +54,24 @@ class GT06Handler {
             const battery = this.getBattery(data.voltageLevel);
             const signal = this.getSignal(data.gsmSigStrength);
             const nepalTime = datetimeService.getNepalDateTime(new Date());
+            
+            // Initialize device status if not exists
+            if (data.imei && !deviceStatus[data.imei]) {
+                deviceStatus[data.imei] = {
+                    imei: data.imei,
+                    relay: false,
+                    relayState: false,
+                    lastUpdate: Date.now()
+                };
+            }
+            
+            // Update device status from terminal info if available
+            if (data.imei && deviceStatus[data.imei] && data.terminalInfo && data.terminalInfo.relayState !== undefined) {
+                deviceStatus[data.imei].relay = data.terminalInfo.relayState;
+                deviceStatus[data.imei].relayState = data.terminalInfo.relayState;
+                deviceStatus[data.imei].lastUpdate = Date.now();
+            }
+            
             const statusData = {
                 deviceId: device.imei,
                 imei: data.imei.toString(),
@@ -311,6 +332,15 @@ class GT06Handler {
                 SchoolBusNotificationService.checkSchoolBusProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
             }
         } else if (data.event.string === 'login') {
+            // Initialize device status when device logs in
+            if (data.imei && !deviceStatus[data.imei]) {
+                deviceStatus[data.imei] = {
+                    imei: data.imei,
+                    relay: false,
+                    relayState: false,
+                    lastUpdate: Date.now()
+                };
+            }
             socketService.deviceMonitoringMessage('login', data.imei, null, null);
         } else if (data.event.string === 'alarm') {
             // Handle alarm events - extract alarm type and save to alarm_data table
@@ -417,6 +447,165 @@ class GT06Handler {
 
 }
 
+// Parse relay response message (Type 0x15)
+function parseRelayResponseMessage(data, imei) {
+    let responseText = "";
+    
+    try {
+        // Skip header(2) + length(1) + type(1) + some control bytes, extract until CRC
+        let dataStart = 8; // Skip initial control bytes after type
+        let dataEnd = data.length - 4; // Before CRC(2) + footer(2)
+        
+        // Extract the ASCII text portion
+        for (let i = dataStart; i < dataEnd; i++) {
+            let byte = data[i];
+            if (byte >= 0x20 && byte <= 0x7E) { // Printable ASCII range
+                responseText += String.fromCharCode(byte);
+            } else if (byte === 0x00) {
+                // Skip null bytes
+                continue;
+            } else {
+                // Stop at non-ASCII bytes (likely reached CRC)
+                break;
+            }
+        }
+        
+        // Clean up the response text
+        responseText = responseText.trim();
+        
+    } catch (error) {
+        console.error('Error parsing relay response:', error);
+        responseText = "Parse error";
+    }
+    
+    return {
+        imei: imei,
+        event: { string: "relayresponse", number: 0x15 },
+        str: responseText,
+        responseText: responseText,
+        parseTime: Date.now()
+    };
+}
+
+// Parse relay status message (Header 7979)
+function parseRelayStatusMessage(data, imei) {
+    let str = "";
+    let relayState = null;
+    
+    try {
+        // Extract ASCII data from 7979 message
+        // Start after header (2) + type (1) + length (1) + control bytes
+        let dataStart = 6; // Skip 7979 + type + length + some control bytes
+        let dataEnd = data.length - 4; // Before CRC (2 bytes) + footer 0D0A (2 bytes)
+        
+        // Look for ASCII data
+        for (let i = dataStart; i < Math.min(dataEnd, data.length - 6); i++) {
+            if (data[i] >= 0x20 && data[i] <= 0x7E) {
+                dataStart = i;
+                break;
+            }
+        }
+        
+        if (dataEnd > dataStart) {
+            let ndata = data.slice(dataStart, dataEnd);
+            str = ndata.toString('ascii');
+            
+            console.log('7979 status message ASCII:', str);
+            
+            // Parse DYD value (DYD=01 means ON, DYD=00 means OFF)
+            const dydMatch = str.match(/DYD=(\d+)/);
+            if (dydMatch) {
+                relayState = dydMatch[1] === '01';
+                console.log('Parsed relay state from DYD:', dydMatch[1], '-> Relay:', relayState ? 'ON' : 'OFF');
+            }
+        }
+    } catch (error) {
+        console.error('Error parsing relay status message:', error);
+    }
+    
+    return {
+        imei: imei,
+        str: str,
+        relayState: relayState,
+        event: { string: "relaystatus", number: data[4] },
+        parseTime: Date.now()
+    };
+}
+
+// Process relay message and update device status
+function processRelayMessage(msg, imei) {
+    if (!msg) return;
+    
+    // Initialize device status if not exists
+    if (imei && imei !== 'Unknown' && !deviceStatus[imei]) {
+        deviceStatus[imei] = {
+            imei: imei,
+            relay: false,
+            relayState: false,
+            lastUpdate: Date.now()
+        };
+    }
+    
+    // Handle relay response (0x15)
+    if (msg.event && msg.event.string === "relayresponse") {
+        console.log('RELAY RESPONSE from', imei, ':', msg.str);
+        
+        // Check for error indicators in response
+        const isError = msg.str && (
+            msg.str.toLowerCase().includes('error') ||
+            msg.str.toLowerCase().includes('fail') ||
+            msg.str.toLowerCase().includes('invalid') ||
+            msg.str.toLowerCase().includes('denied')
+        );
+        
+        if (isError) {
+            console.log('ERROR detected in relay response:', msg.str);
+            return;
+        }
+        
+        // Update relay state if response indicates success
+        if (imei && imei !== 'Unknown' && deviceStatus[imei] && msg.str && !isError) {
+            // Check if response indicates relay state change
+            const success = msg.str.includes('Success') || 
+                         msg.str.includes('DYD') || 
+                         msg.str.includes('HFYD') ||
+                         msg.str.toLowerCase().includes('on') ||
+                         msg.str.toLowerCase().includes('off');
+            
+            if (success) {
+                // Try to determine new state from response string
+                const isOn = msg.str.toLowerCase().includes('on') || 
+                            msg.str.includes('DYD') || 
+                            msg.str.includes('HFYD');
+                
+                deviceStatus[imei].relay = isOn;
+                deviceStatus[imei].relayState = isOn;
+                deviceStatus[imei].lastUpdate = Date.now();
+                console.log('Updated relay state for', imei, 'to:', isOn ? 'ON' : 'OFF');
+            }
+        }
+    }
+    
+    // Handle relay status (7979)
+    if (msg.event && msg.event.string === "relaystatus") {
+        console.log('RELAY STATUS MESSAGE from', imei, ':', msg.str);
+        console.log('Relay state from status:', msg.relayState !== null ? (msg.relayState ? 'ON' : 'OFF') : 'unknown');
+        
+        // Update relay state from status message
+        if (imei && imei !== 'Unknown' && deviceStatus[imei] && msg.relayState !== null) {
+            const now = Date.now();
+            deviceStatus[imei].relay = msg.relayState;
+            deviceStatus[imei].relayState = msg.relayState;
+            deviceStatus[imei].lastUpdate = now;
+            console.log('Updated relay state from 7979 status message for', imei, 'to:', msg.relayState ? 'ON' : 'OFF');
+        }
+    }
+}
+
 module.exports = {
-    GT06Handler
+    GT06Handler,
+    parseRelayResponseMessage,
+    parseRelayStatusMessage,
+    processRelayMessage,
+    deviceStatus
 }
