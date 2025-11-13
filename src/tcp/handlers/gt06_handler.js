@@ -558,7 +558,33 @@ function parseRelayStatusMessage(data, imei) {
                         console.log('Could not determine relay state from message text:', str);
                     }
                 } else {
-                    console.log('Message does not contain success indicators, skipping relay state parsing');
+                    // No success indicators - try to parse from informational/status messages
+                    // Check for "already" messages that indicate current state
+                    const lowerStr = str.toLowerCase();
+                    const hasAlready = lowerStr.includes('already');
+                    
+                    if (hasAlready) {
+                        // Check for "already in the state of fuel supply cut off" or "already cut off" = Relay ON
+                        if (lowerStr.includes('already') && 
+                            (lowerStr.includes('cut off') || lowerStr.includes('cutoff') || lowerStr.includes('cut-off') ||
+                             lowerStr.includes('fuel supply cut off') || lowerStr.includes('state of fuel supply cut off'))) {
+                            relayState = true; // Relay ON = Cut Fuel
+                            console.log('Parsed relay state from "already" message: "Cut off" -> Relay: ON');
+                        }
+                        // Check for "already in the state of fuel supply restored" or "already restored" = Relay OFF
+                        else if (lowerStr.includes('already') && 
+                                (lowerStr.includes('restore') || lowerStr.includes('fuel supply restored') || 
+                                 lowerStr.includes('state of fuel supply restored'))) {
+                            relayState = false; // Relay OFF = Restore Fuel
+                            console.log('Parsed relay state from "already" message: "Restore" -> Relay: OFF');
+                        }
+                        
+                        if (relayState === null) {
+                            console.log('Could not determine relay state from "already" message:', str);
+                        }
+                    } else {
+                        console.log('Message does not contain success indicators or "already" keyword, skipping relay state parsing');
+                    }
                 }
             }
         }
