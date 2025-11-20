@@ -3,8 +3,11 @@ const firebaseService = require('./firebase_service');
 
 class SchoolBusNotificationService {
     // In-memory cache to track notification state for each parent-IMEI pair
-    // Key format: `${imei}_${parentId}`, Value: { isInside: boolean, lastCheckTime: timestamp }
+    // Key format: `${imei}_${parentId}`, Value: { isInside: boolean, lastCheckTime: timestamp, lastNotificationLat: number, lastNotificationLon: number }
     static notificationStateCache = new Map();
+    
+    // Minimum distance threshold (in kilometers) - bus must move at least this distance from last notification location
+    static MIN_DISTANCE_THRESHOLD_KM = 0.5; // 500 meters = 0.5 km
     
     /**
      * Calculate distance between two points using Haversine formula
@@ -85,21 +88,40 @@ class SchoolBusNotificationService {
                     
                     if (!wasInside && isCurrentlyInside) {
                         // Transition: Outside → Inside (entering radius)
-                        shouldNotify = true;
+                        // Check if bus has moved at least 500m from last notification location
+                        if (lastState.lastNotificationLat && lastState.lastNotificationLon) {
+                            const distanceFromLastNotification = this.calculateDistance(
+                                vehicleLat,
+                                vehicleLon,
+                                lastState.lastNotificationLat,
+                                lastState.lastNotificationLon
+                            );
+                            
+                            // Only notify if bus has moved at least 500m from last notification location
+                            if (distanceFromLastNotification >= this.MIN_DISTANCE_THRESHOLD_KM) {
+                                shouldNotify = true;
+                            }
+                        } else {
+                            // No previous notification location, allow notification
+                            shouldNotify = true;
+                        }
                     }
                 }
                 
                 // Update cache with current state
                 this.notificationStateCache.set(cacheKey, {
                     isInside: isCurrentlyInside,
-                    lastCheckTime: Date.now()
+                    lastCheckTime: Date.now(),
+                    lastNotificationLat: lastState?.lastNotificationLat || null,
+                    lastNotificationLon: lastState?.lastNotificationLon || null
                 });
                 
                 // Add to notification list if should notify
                 if (shouldNotify) {
                     parentsToNotify.push({
                         ...parent,
-                        distance: distance
+                        distance: distance,
+                        cacheKey: cacheKey
                     });
                 }
             }
@@ -126,6 +148,17 @@ class SchoolBusNotificationService {
                                 distance: String(parent.distance.toFixed(2))
                             }
                         );
+                        
+                        // Update cache with current bus location as last notification location
+                        const cacheKey = parent.cacheKey;
+                        const currentState = this.notificationStateCache.get(cacheKey);
+                        if (currentState) {
+                            this.notificationStateCache.set(cacheKey, {
+                                ...currentState,
+                                lastNotificationLat: parseFloat(vehicleLat),
+                                lastNotificationLon: parseFloat(vehicleLon)
+                            });
+                        }
                     } catch (error) {
                         // Silently handle notification errors
                     }
