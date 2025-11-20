@@ -3,11 +3,11 @@ const firebaseService = require('./firebase_service');
 
 class SchoolBusNotificationService {
     // In-memory cache to track notification state for each parent-IMEI pair
-    // Key format: `${imei}_${parentId}`, Value: { isInside: boolean, lastCheckTime: timestamp, lastNotificationLat: number, lastNotificationLon: number }
+    // Key format: `${imei}_${parentId}`, Value: { isInside: boolean, lastCheckTime: timestamp, lastNotificationTime: timestamp }
     static notificationStateCache = new Map();
     
-    // Minimum distance threshold (in kilometers) - bus must move at least this distance from last notification location
-    static MIN_DISTANCE_THRESHOLD_KM = 0.5; // 500 meters = 0.5 km
+    // Minimum time interval (in milliseconds) - must wait at least this time between notifications for same IMEI-parent pair
+    static MIN_NOTIFICATION_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
     
     /**
      * Calculate distance between two points using Haversine formula
@@ -88,21 +88,16 @@ class SchoolBusNotificationService {
                     
                     if (!wasInside && isCurrentlyInside) {
                         // Transition: Outside → Inside (entering radius)
-                        // Check if bus has moved at least 500m from last notification location
-                        if (lastState.lastNotificationLat && lastState.lastNotificationLon) {
-                            const distanceFromLastNotification = this.calculateDistance(
-                                vehicleLat,
-                                vehicleLon,
-                                lastState.lastNotificationLat,
-                                lastState.lastNotificationLon
-                            );
+                        // Check if at least 30 minutes have passed since last notification
+                        if (lastState.lastNotificationTime) {
+                            const timeSinceLastNotification = Date.now() - lastState.lastNotificationTime;
                             
-                            // Only notify if bus has moved at least 500m from last notification location
-                            if (distanceFromLastNotification >= this.MIN_DISTANCE_THRESHOLD_KM) {
+                            // Only notify if at least 30 minutes have passed since last notification
+                            if (timeSinceLastNotification >= this.MIN_NOTIFICATION_INTERVAL_MS) {
                                 shouldNotify = true;
                             }
                         } else {
-                            // No previous notification location, allow notification
+                            // No previous notification time, allow notification
                             shouldNotify = true;
                         }
                     }
@@ -112,8 +107,7 @@ class SchoolBusNotificationService {
                 this.notificationStateCache.set(cacheKey, {
                     isInside: isCurrentlyInside,
                     lastCheckTime: Date.now(),
-                    lastNotificationLat: lastState?.lastNotificationLat || null,
-                    lastNotificationLon: lastState?.lastNotificationLon || null
+                    lastNotificationTime: lastState?.lastNotificationTime || null
                 });
                 
                 // Add to notification list if should notify
@@ -149,14 +143,13 @@ class SchoolBusNotificationService {
                             }
                         );
                         
-                        // Update cache with current bus location as last notification location
+                        // Update cache with current time as last notification time
                         const cacheKey = parent.cacheKey;
                         const currentState = this.notificationStateCache.get(cacheKey);
                         if (currentState) {
                             this.notificationStateCache.set(cacheKey, {
                                 ...currentState,
-                                lastNotificationLat: parseFloat(vehicleLat),
-                                lastNotificationLon: parseFloat(vehicleLon)
+                                lastNotificationTime: Date.now()
                             });
                         }
                     } catch (error) {
