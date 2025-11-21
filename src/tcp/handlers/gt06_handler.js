@@ -512,6 +512,21 @@ class GT06Handler {
         return alarmTypes[firstDigit] || 'normal';
     }
 
+    // Helper method to safely convert fixTime to ISO string
+    safeFixTimeToISO(fixTime) {
+        if (!fixTime) return null;
+        if (fixTime instanceof Date) {
+            return fixTime.toISOString();
+        } else if (typeof fixTime === 'number') {
+            return new Date(fixTime).toISOString();
+        } else if (typeof fixTime === 'string') {
+            const date = new Date(fixTime);
+            return isNaN(date.getTime()) ? String(fixTime) : date.toISOString();
+        } else {
+            return String(fixTime);
+        }
+    }
+
     // Format GT06 data as JSON for external TCP server
     formatDataForExternalServer(data, eventType, additionalData = {}) {
         try {
@@ -558,7 +573,7 @@ class GT06Handler {
                 if (data.speed !== undefined) jsonData.speedRaw = data.speed;
                 if (data.course !== undefined) jsonData.courseRaw = data.course;
                 if (data.satCnt !== undefined) jsonData.satCnt = data.satCnt;
-                if (data.fixTime) jsonData.fixTime = data.fixTime.toISOString();
+                if (data.fixTime) jsonData.fixTime = this.safeFixTimeToISO(data.fixTime);
             } else if (eventType === 'login') {
                 // Login event - minimal data
                 if (data.imei) jsonData.imei = data.imei.toString();
@@ -575,7 +590,7 @@ class GT06Handler {
                 if (data.lat !== undefined) jsonData.lat = data.lat;
                 if (data.lon !== undefined) jsonData.lon = data.lon;
                 if (data.alarmLang !== undefined) jsonData.alarmLang = data.alarmLang;
-                if (data.fixTime) jsonData.fixTime = data.fixTime.toISOString();
+                if (data.fixTime) jsonData.fixTime = this.safeFixTimeToISO(data.fixTime);
             }
 
             return jsonData;
