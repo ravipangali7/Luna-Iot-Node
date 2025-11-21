@@ -1,4 +1,5 @@
 const net = require('net');
+require('dotenv').config();
 
 class TCPClientService {
     constructor() {
@@ -11,6 +12,64 @@ class TCPClientService {
         this.reconnectDelay = 5000; // 5 seconds
         this.pendingData = []; // Queue for data when disconnected
         this.isConnecting = false;
+        this.allowedImeis = new Set(); // Set for fast IMEI lookup
+        this.loadAllowedImeis(); // Load IMEI list on initialization
+    }
+
+    // Load allowed IMEI list from environment variable
+    loadAllowedImeis() {
+        try {
+            const imeiListEnv = process.env.EXTERNAL_TCP_ALLOWED_IMEIS;
+            
+            if (!imeiListEnv || imeiListEnv.trim() === '') {
+                // If not set, allow all IMEIs (backward compatible)
+                console.log(`[TCP Client] No IMEI filter configured - allowing all IMEIs`);
+                this.allowedImeis = null; // null means allow all
+                return;
+            }
+
+            // Parse JSON array from environment variable
+            let imeiList;
+            try {
+                imeiList = JSON.parse(imeiListEnv);
+            } catch (parseError) {
+                console.error(`[TCP Client] Error parsing EXTERNAL_TCP_ALLOWED_IMEIS:`, parseError.message);
+                console.log(`[TCP Client] Allowing all IMEIs due to parse error`);
+                this.allowedImeis = null;
+                return;
+            }
+
+            // Validate it's an array
+            if (!Array.isArray(imeiList)) {
+                console.error(`[TCP Client] EXTERNAL_TCP_ALLOWED_IMEIS must be a JSON array`);
+                console.log(`[TCP Client] Allowing all IMEIs due to invalid format`);
+                this.allowedImeis = null;
+                return;
+            }
+
+            // Convert to Set for fast lookup and normalize IMEIs to strings
+            this.allowedImeis = new Set(imeiList.map(imei => String(imei).trim()).filter(imei => imei.length > 0));
+            
+            console.log(`[TCP Client] Loaded ${this.allowedImeis.size} allowed IMEI(s) for external TCP server`);
+            if (this.allowedImeis.size > 0) {
+                console.log(`[TCP Client] Allowed IMEIs:`, Array.from(this.allowedImeis).join(', '));
+            }
+        } catch (error) {
+            console.error(`[TCP Client] Error loading allowed IMEIs:`, error.message);
+            this.allowedImeis = null; // Allow all on error
+        }
+    }
+
+    // Check if IMEI is allowed to send data
+    isImeiAllowed(imei) {
+        // If allowedImeis is null, allow all (backward compatible)
+        if (this.allowedImeis === null) {
+            return true;
+        }
+
+        // Normalize IMEI to string for comparison
+        const imeiStr = String(imei).trim();
+        return this.allowedImeis.has(imeiStr);
     }
 
     // Initialize and establish connection

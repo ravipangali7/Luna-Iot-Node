@@ -604,6 +604,15 @@ class GT06Handler {
     sendToExternalServer(jsonData) {
         if (!jsonData) return;
         
+        // Extract IMEI from JSON data
+        const imei = jsonData.imei || jsonData.deviceId || null;
+        
+        // Check if IMEI is allowed (if filtering is enabled)
+        if (!tcpClientService.isImeiAllowed(imei)) {
+            // IMEI not in allowed list, skip sending
+            return;
+        }
+        
         // Fire-and-forget: send asynchronously without blocking
         setImmediate(() => {
             try {
