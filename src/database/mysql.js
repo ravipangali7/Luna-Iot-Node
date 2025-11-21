@@ -98,6 +98,25 @@ class MySQLService {
         return results[0] || null;
     }
 
+    async getVehicleOdometer(imei) {
+        const sql = `
+            SELECT odometer 
+            FROM vehicles 
+            WHERE imei = ? AND is_active = 1
+        `;
+        const results = await this.query(sql, [imei]);
+        return results[0]?.odometer || 0;
+    }
+
+    async updateVehicleOdometer(imei, newOdometer) {
+        const sql = `
+            UPDATE vehicles 
+            SET odometer = ? 
+            WHERE imei = ? AND is_active = 1
+        `;
+        return this.query(sql, [newOdometer, imei]);
+    }
+
     async getDeviceByImei(imei) {
         const sql = `
             SELECT id, imei, phone, sim, protocol, iccid, model, type

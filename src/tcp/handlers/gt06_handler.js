@@ -353,6 +353,28 @@ class GT06Handler {
                     // For new data, created_at = nepalTime (just inserted)
                     socketService.locationUpdateMessage(locationData.imei, locationData.latitude, locationData.longitude, locationData.speed, locationData.course, locationData.satellite, locationData.realTimeGps, nepalTime);
                     socketService.deviceMonitoringMessage('location', data.imei, data.lat, data.lon);
+
+                    // Calculate distance and update odometer
+                    if (latestLocation) {
+                        try {
+                            const distance = SchoolBusNotificationService.calculateDistance(
+                                latestLocation.latitude,
+                                latestLocation.longitude,
+                                locationData.latitude,
+                                locationData.longitude
+                            );
+                            
+                            // Only update if distance is significant (filter GPS noise)
+                            if (distance > 0.01) {
+                                const currentOdometer = await mysqlService.getVehicleOdometer(data.imei);
+                                const newOdometer = parseFloat(currentOdometer || 0) + distance;
+                                await mysqlService.updateVehicleOdometer(data.imei, newOdometer);
+                                console.log(`Updated odometer for ${data.imei}: ${parseFloat(currentOdometer || 0).toFixed(2)} + ${distance.toFixed(2)} = ${newOdometer.toFixed(2)} km`);
+                            }
+                        } catch (error) {
+                            console.error(`Error updating odometer for ${data.imei}:`, error);
+                        }
+                    }
                 } else {
                     // Same data - just update the timestamp
                     await mysqlService.updateLocationTimestamp(data.imei);
