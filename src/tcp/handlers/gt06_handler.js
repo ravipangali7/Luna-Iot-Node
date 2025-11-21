@@ -6,6 +6,7 @@ const GT06NotificationService = require('../../utils/gt06_notification_service')
 const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
 const SchoolBusNotificationService = require('../../utils/school_bus_notification_service');
+const tcpClientService = require('../../utils/tcp_client_service');
 
 // Device status map to track relay state per IMEI
 const deviceStatus = {};
@@ -133,6 +134,16 @@ class GT06Handler {
                 }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
 
+                // Send status data to external TCP server
+                const statusJsonData = this.formatDataForExternalServer(data, 'status', {
+                    battery: battery,
+                    signal: signal,
+                    ignition: data.terminalInfo.ignition,
+                    charging: data.terminalInfo.charging,
+                    relay: data.terminalInfo.relayState
+                });
+                this.sendToExternalServer(statusJsonData);
+
                 // NOW check for alert_history creation (non-blocking, fire-and-forget)
                 // Check for transition: OFF (0) -> ON (1)
                 if (previousIgnition === 0 && currentIgnition === 1) {
@@ -224,6 +235,16 @@ class GT06Handler {
                     await mysqlService.updateBuzzerStatusTimestamp(latestStatus.id, nepalTime);
                 }
                 socketService.deviceMonitoringMessage('status', data.imei, null, null);
+
+                // Send status data to external TCP server
+                const statusJsonData = this.formatDataForExternalServer(data, 'status', {
+                    battery: battery,
+                    signal: signal,
+                    ignition: data.terminalInfo.ignition,
+                    charging: data.terminalInfo.charging,
+                    relay: data.terminalInfo.relayState
+                });
+                this.sendToExternalServer(statusJsonData);
             } else if (deviceType === 'gps') {
                 // Original GPS status handling logic
                 // Filter: Check if status data has changed from latest
@@ -270,6 +291,16 @@ class GT06Handler {
                     // Still send socket message for real-time updates with original created_at
                     socketService.statusUpdateMessage(statusData.imei, statusData.battery, statusData.signal, statusData.ignition, statusData.charging, statusData.relay, createdAt);
                 }
+
+                // Send status data to external TCP server
+                const statusJsonData = this.formatDataForExternalServer(data, 'status', {
+                    battery: battery,
+                    signal: signal,
+                    ignition: data.terminalInfo.ignition,
+                    charging: data.terminalInfo.charging,
+                    relay: data.terminalInfo.relayState
+                });
+                this.sendToExternalServer(statusJsonData);
             }
         } else if (data.event.string === 'location') {
             // Skip location events for buzzer and sos device types
@@ -337,6 +368,17 @@ class GT06Handler {
 
                 // Check school bus proximity to parents and send notifications
                 SchoolBusNotificationService.checkSchoolBusProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
+
+                // Send location data to external TCP server
+                const locationJsonData = this.formatDataForExternalServer(data, 'location', {
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude,
+                    speed: locationData.speed,
+                    course: locationData.course,
+                    satellite: locationData.satellite,
+                    realTimeGps: locationData.realTimeGps
+                });
+                this.sendToExternalServer(locationJsonData);
             }
         } else if (data.event.string === 'login') {
             // Initialize device status when device logs in
@@ -349,6 +391,10 @@ class GT06Handler {
                 };
             }
             socketService.deviceMonitoringMessage('login', data.imei, null, null);
+
+            // Send login data to external TCP server
+            const loginJsonData = this.formatDataForExternalServer(data, 'login', {});
+            this.sendToExternalServer(loginJsonData);
         } else if (data.event.string === 'alarm') {
             // Handle alarm events - extract alarm type and save to alarm_data table
             const nepalTime = datetimeService.getNepalDateTime(data.fixTime);
@@ -378,6 +424,20 @@ class GT06Handler {
             socketService.deviceMonitoringMessage('alarm', data.imei, data.lat, data.lon);
             
             console.log(`🚨 ALARM - IMEI: ${data.imei}, Type: ${alarmType}, Lat: ${data.lat}, Lon: ${data.lon}, AlarmLang: ${data.alarmLang}`);
+
+            // Send alarm data to external TCP server
+            const alarmJsonData = this.formatDataForExternalServer(data, 'alarm', {
+                latitude: alarmData.latitude,
+                longitude: alarmData.longitude,
+                speed: alarmData.speed,
+                course: alarmData.course,
+                satellite: alarmData.satellite,
+                realTimeGps: alarmData.realTimeGps,
+                battery: battery,
+                signal: signal,
+                alarm: alarmType
+            });
+            this.sendToExternalServer(alarmJsonData);
         }
         else {
             console.log('SORRY WE DIDNT HANDLE THAT');
@@ -450,6 +510,93 @@ class GT06Handler {
         const firstDigit = parseInt(hexStr[0]);
         const alarmTypes = ['normal', 'sos', 'power_cut', 'shock', 'fence_in', 'fence_out'];
         return alarmTypes[firstDigit] || 'normal';
+    }
+
+    // Format GT06 data as JSON for external TCP server
+    formatDataForExternalServer(data, eventType, additionalData = {}) {
+        try {
+            const jsonData = {
+                imei: data.imei ? data.imei.toString() : 'Unknown',
+                eventType: eventType,
+                timestamp: new Date().toISOString(),
+                ...additionalData
+            };
+
+            // Add common fields from GT06 data
+            if (data.event) {
+                jsonData.event = {
+                    string: data.event.string,
+                    number: data.event.number
+                };
+            }
+
+            // Add event-specific fields
+            if (eventType === 'status') {
+                jsonData.battery = additionalData.battery;
+                jsonData.signal = additionalData.signal;
+                jsonData.ignition = additionalData.ignition;
+                jsonData.charging = additionalData.charging;
+                jsonData.relay = additionalData.relay;
+                if (data.voltageLevel !== undefined) jsonData.voltageLevel = data.voltageLevel;
+                if (data.gsmSigStrength !== undefined) jsonData.gsmSigStrength = data.gsmSigStrength;
+                if (data.terminalInfo) {
+                    jsonData.terminalInfo = {
+                        ignition: data.terminalInfo.ignition,
+                        charging: data.terminalInfo.charging,
+                        relayState: data.terminalInfo.relayState
+                    };
+                }
+            } else if (eventType === 'location') {
+                jsonData.latitude = additionalData.latitude;
+                jsonData.longitude = additionalData.longitude;
+                jsonData.speed = additionalData.speed;
+                jsonData.course = additionalData.course;
+                jsonData.satellite = additionalData.satellite;
+                jsonData.realTimeGps = additionalData.realTimeGps;
+                if (data.lat !== undefined) jsonData.lat = data.lat;
+                if (data.lon !== undefined) jsonData.lon = data.lon;
+                if (data.speed !== undefined) jsonData.speedRaw = data.speed;
+                if (data.course !== undefined) jsonData.courseRaw = data.course;
+                if (data.satCnt !== undefined) jsonData.satCnt = data.satCnt;
+                if (data.fixTime) jsonData.fixTime = data.fixTime.toISOString();
+            } else if (eventType === 'login') {
+                // Login event - minimal data
+                if (data.imei) jsonData.imei = data.imei.toString();
+            } else if (eventType === 'alarm') {
+                jsonData.latitude = additionalData.latitude;
+                jsonData.longitude = additionalData.longitude;
+                jsonData.speed = additionalData.speed;
+                jsonData.course = additionalData.course;
+                jsonData.satellite = additionalData.satellite;
+                jsonData.realTimeGps = additionalData.realTimeGps;
+                jsonData.battery = additionalData.battery;
+                jsonData.signal = additionalData.signal;
+                jsonData.alarm = additionalData.alarm;
+                if (data.lat !== undefined) jsonData.lat = data.lat;
+                if (data.lon !== undefined) jsonData.lon = data.lon;
+                if (data.alarmLang !== undefined) jsonData.alarmLang = data.alarmLang;
+                if (data.fixTime) jsonData.fixTime = data.fixTime.toISOString();
+            }
+
+            return jsonData;
+        } catch (error) {
+            console.error(`[GT06 Handler] Error formatting data for external server:`, error);
+            return null;
+        }
+    }
+
+    // Send data to external TCP server (non-blocking)
+    sendToExternalServer(jsonData) {
+        if (!jsonData) return;
+        
+        // Fire-and-forget: send asynchronously without blocking
+        setImmediate(() => {
+            try {
+                tcpClientService.sendData(jsonData);
+            } catch (error) {
+                console.error(`[GT06 Handler] Error sending to external server:`, error);
+            }
+        });
     }
 
 }
