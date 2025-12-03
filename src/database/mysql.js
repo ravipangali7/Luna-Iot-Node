@@ -407,6 +407,58 @@ class MySQLService {
         `;
         return this.query(sql, [imei]);
     }
+
+    // ==================== PUBLIC VEHICLE SUBSCRIPTION METHODS ====================
+
+    async getPublicVehicleSubscriptionsByImei(imei) {
+        const sql = `
+            SELECT 
+                pvs.id,
+                u.id as user_id,
+                u.name, 
+                u.fcm_token, 
+                pvs.latitude, 
+                pvs.longitude
+            FROM vehicles v
+            INNER JOIN public_vehicle_subscriptions pvs ON pvs.vehicle_id = v.id
+            INNER JOIN users u ON u.id = pvs.user_id
+            WHERE v.imei = ? 
+                AND v.is_active = 1
+                AND u.is_active = 1
+                AND u.fcm_token IS NOT NULL 
+                AND u.fcm_token != ''
+                AND pvs.notification = 1
+                AND pvs.latitude IS NOT NULL
+                AND pvs.longitude IS NOT NULL
+        `;
+        return this.query(sql, [imei]);
+    }
+
+    // ==================== GARBAGE VEHICLE SUBSCRIPTION METHODS ====================
+
+    async getGarbageVehicleSubscriptionsByImei(imei) {
+        const sql = `
+            SELECT 
+                gvs.id,
+                u.id as user_id,
+                u.name, 
+                u.fcm_token, 
+                gvs.latitude, 
+                gvs.longitude
+            FROM vehicles v
+            INNER JOIN garbage_vehicle_subscriptions gvs ON gvs.vehicle_id = v.id
+            INNER JOIN users u ON u.id = gvs.user_id
+            WHERE v.imei = ? 
+                AND v.is_active = 1
+                AND u.is_active = 1
+                AND u.fcm_token IS NOT NULL 
+                AND u.fcm_token != ''
+                AND gvs.notification = 1
+                AND gvs.latitude IS NOT NULL
+                AND gvs.longitude IS NOT NULL
+        `;
+        return this.query(sql, [imei]);
+    }
 }
 
 module.exports = new MySQLService();

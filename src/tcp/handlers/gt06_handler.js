@@ -6,6 +6,8 @@ const GT06NotificationService = require('../../utils/gt06_notification_service')
 const geofenceService = require('../../utils/geofence_service');
 const datetimeService = require('../../utils/datetime_service');
 const SchoolBusNotificationService = require('../../utils/school_bus_notification_service');
+const PublicVehicleNotificationService = require('../../utils/public_vehicle_notification_service');
+const GarbageVehicleNotificationService = require('../../utils/garbage_vehicle_notification_service');
 const tcpClientService = require('../../utils/tcp_client_service');
 
 // Device status map to track relay state per IMEI
@@ -390,6 +392,12 @@ class GT06Handler {
 
                 // Check school bus proximity to parents and send notifications
                 SchoolBusNotificationService.checkSchoolBusProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
+
+                // Check public vehicle proximity and send notifications
+                PublicVehicleNotificationService.checkPublicVehicleProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
+
+                // Check garbage vehicle proximity and send notifications
+                GarbageVehicleNotificationService.checkGarbageVehicleProximityAndNotify(data.imei, locationData.latitude, locationData.longitude);
 
                 // Send location data to external TCP server
                 const locationJsonData = this.formatDataForExternalServer(data, 'location', {
