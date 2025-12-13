@@ -211,6 +211,67 @@ class GT06Handler {
                     })().catch(err => {
                         console.error(`[ALERT HISTORY] ❌ Unhandled error in alert_history background task:`, err);
                     });
+
+                    // Also check for community-siren switch (non-blocking, fire-and-forget)
+                    (async () => {
+                        try {
+                            const communitySirenSwitchStart = Date.now();
+                            const communitySirenSwitch = await mysqlService.getCommunitySirenSwitchByImei(data.imei);
+                            console.log(`[COMMUNITY SIREN HISTORY] ⏱️ Community siren switch lookup took ${Date.now() - communitySirenSwitchStart}ms`);
+                            
+                            if (!communitySirenSwitch) {
+                                console.log(`[COMMUNITY SIREN HISTORY] ❌ Community siren switch not found for IMEI: ${data.imei}`);
+                            } else if (!communitySirenSwitch.instituteId) {
+                                console.log(`[COMMUNITY SIREN HISTORY] ❌ Community siren switch found but no instituteId for IMEI: ${data.imei}`, {
+                                    switchId: communitySirenSwitch.id,
+                                    name: communitySirenSwitch.name
+                                });
+                            } else {
+                                console.log(`[COMMUNITY SIREN HISTORY] ✅ Community siren switch found with instituteId for IMEI: ${data.imei}`, {
+                                    switchId: communitySirenSwitch.id,
+                                    name: communitySirenSwitch.name,
+                                    instituteId: communitySirenSwitch.instituteId,
+                                    latitude: communitySirenSwitch.latitude,
+                                    longitude: communitySirenSwitch.longitude
+                                });
+                                
+                                const pythonCommunitySirenService = require('../../utils/python_community_siren_service');
+                                const payload = {
+                                    source: 'switch',
+                                    name: communitySirenSwitch.name || 'Unknown',
+                                    primary_phone: communitySirenSwitch.primaryPhone || '',
+                                    secondary_phone: communitySirenSwitch.secondaryPhone || '',
+                                    latitude: communitySirenSwitch.latitude,
+                                    longitude: communitySirenSwitch.longitude,
+                                    datetime: new Date().toISOString(),
+                                    remarks: `Auto-created from Community Siren switch ignition ON (IMEI: ${data.imei})`,
+                                    status: 'pending',
+                                    institute: communitySirenSwitch.instituteId,
+                                    member: null
+                                };
+                                
+                                console.log(`[COMMUNITY SIREN HISTORY] 📤 Sending payload to Python API (non-blocking):`, JSON.stringify(payload, null, 2));
+                                
+                                const apiStart = Date.now();
+                                const result = await pythonCommunitySirenService.createCommunitySirenHistory(payload);
+                                const apiTime = Date.now() - apiStart;
+                                
+                                if (result.success) {
+                                    console.log(`[COMMUNITY SIREN HISTORY] ✅ Successfully created community_siren_history for IMEI: ${data.imei} (API took ${apiTime}ms)`, {
+                                        status: result.status,
+                                        data: result.data
+                                    });
+                                } else {
+                                    console.error(`[COMMUNITY SIREN HISTORY] ❌ Failed to create community_siren_history for IMEI: ${data.imei} (API took ${apiTime}ms):`, result);
+                                }
+                            }
+                        } catch (err) {
+                            console.error(`[COMMUNITY SIREN HISTORY] ❌ Error creating community siren history for switch ignition ON (IMEI: ${data.imei}):`, err.message);
+                            console.error(err.stack);
+                        }
+                    })().catch(err => {
+                        console.error(`[COMMUNITY SIREN HISTORY] ❌ Unhandled error in community_siren_history background task:`, err);
+                    });
                 } else {
                 }
             } else if (deviceType === 'buzzer') {

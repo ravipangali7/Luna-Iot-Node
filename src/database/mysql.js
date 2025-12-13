@@ -282,6 +282,25 @@ class MySQLService {
         return results[0] || null;
     }
 
+    async getCommunitySirenSwitchByImei(imei) {
+        const sql = `
+            SELECT 
+                s.id,
+                s.institute_id AS instituteId,
+                s.latitude,
+                s.longitude,
+                s.primary_phone AS primaryPhone,
+                s.secondary_phone AS secondaryPhone,
+                s.title AS name
+            FROM community_siren_switches s
+            INNER JOIN devices d ON s.device_id = d.id
+            WHERE d.imei = ?
+            LIMIT 1
+        `;
+        const results = await this.query(sql, [imei]);
+        return results[0] || null;
+    }
+
     // ==================== BUZZER STATUS METHODS ====================
 
     async insertBuzzerStatus(data) {
