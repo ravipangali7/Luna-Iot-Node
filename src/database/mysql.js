@@ -10,16 +10,16 @@ class MySQLService {
     initializePool() {
         this.pool = mysql.createPool({
             host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || '',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASSWORD || 'Alex$stark453',
             database: process.env.DB_NAME || 'luna_iot',
             port: process.env.DB_PORT || 3306,
             waitForConnections: true,
             connectionLimit: 10,
             queueLimit: 0,
-            acquireTimeout: 60000,
-            timeout: 60000,
-            reconnect: true
+            // acquireTimeout: 60000,
+            // timeout: 60000,
+            // reconnect: true
         });
 
         console.log('MySQL connection pool initialized');
