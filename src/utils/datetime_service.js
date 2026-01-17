@@ -1,18 +1,20 @@
 class DateTimeService {
     nepalTimeDate() {
-        const now = new Date();
-        // Convert from CST (UTC+8) to Nepal time (UTC+5:45)
-        // Nepal is 2 hours 15 minutes behind CST
-        const nepalTime = new Date(now.getTime() - (2 * 60 + 15) * 60000);
-        return nepalTime;
+        // VPS system time is already in Nepal timezone (UTC+5:45)
+        // JavaScript Date objects store time internally as UTC but represent the correct moment
+        // Since system is already in Nepal timezone, use system time directly
+        return new Date();
     }
 
     getNepalDateTime(givenDate) {
-        const date = new Date(givenDate);
-        // Convert from CST (UTC+8) to Nepal time (UTC+5:45)
-        // Nepal is 2 hours 15 minutes behind CST
-        const nepalTime = new Date(date.getTime() - (2 * 60 + 15) * 60000);
-        return nepalTime;
+        // VPS system time is already in Nepal timezone (UTC+5:45)
+        // If givenDate is provided, create Date object from it
+        // The Date object will correctly represent the moment in time
+        if (givenDate) {
+            return new Date(givenDate);
+        }
+        // Otherwise return current time (already in Nepal timezone)
+        return new Date();
     }
 }
 
