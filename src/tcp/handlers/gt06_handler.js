@@ -64,7 +64,7 @@ class GT06Handler {
             const battery = this.getBattery(data.voltageLevel);
             const signal = this.getSignal(data.gsmSigStrength);
             const nepalTime = datetimeService.getNepalDateTime(new Date());
-            if (data.imei = "352312094630210") {
+            if (data.imei === "352312094630210") {
                 console.log('Nepal time:', nepalTime);
             }
             
@@ -435,7 +435,7 @@ class GT06Handler {
                                 const currentOdometer = await mysqlService.getVehicleOdometer(data.imei);
                                 const newOdometer = parseFloat(currentOdometer || 0) + distance;
                                 await mysqlService.updateVehicleOdometer(data.imei, newOdometer);
-                                console.log(`Updated odometer for ${data.imei}: ${parseFloat(currentOdometer || 0).toFixed(2)} + ${distance.toFixed(2)} = ${newOdometer.toFixed(2)} km`);
+                                // console.log(`Updated odometer for ${data.imei}: ${parseFloat(currentOdometer || 0).toFixed(2)} + ${distance.toFixed(2)} = ${newOdometer.toFixed(2)} km`);
                             }
                         } catch (error) {
                             console.error(`Error updating odometer for ${data.imei}:`, error);
