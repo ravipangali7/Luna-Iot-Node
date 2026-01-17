@@ -64,6 +64,7 @@ class GT06Handler {
             const battery = this.getBattery(data.voltageLevel);
             const signal = this.getSignal(data.gsmSigStrength);
             const nepalTime = datetimeService.getNepalDateTime(new Date());
+            console.log('Nepal time:', nepalTime);
             
             // Initialize device status if not exists
             if (data.imei && !deviceStatus[data.imei]) {
