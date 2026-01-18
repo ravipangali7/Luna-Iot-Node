@@ -122,12 +122,12 @@ class GT06NotificationService {
                         const title = 'Vehicle Movement Alert';
                         const message = `${vehicle.vehicle_no}: Vehicle is moving after ignition was turned off ${Math.round(timeSinceIgnitionOff)} minutes ago`;
 
-                        await this.sendVehicleNotification(imei, title, message, {
-                            type: 'moving_after_ignition_off',
-                            ignitionOffTime: latestStatus.created_at,
-                            lastLocationTime: latestLocation.created_at,
-                            timeSinceIgnitionOff: Math.round(timeSinceIgnitionOff)
-                        });
+                        // await this.sendVehicleNotification(imei, title, message, {
+                        //     type: 'moving_after_ignition_off',
+                        //     ignitionOffTime: latestStatus.created_at,
+                        //     lastLocationTime: latestLocation.created_at,
+                        //     timeSinceIgnitionOff: Math.round(timeSinceIgnitionOff)
+                        // });
                     }
                 }
             }
