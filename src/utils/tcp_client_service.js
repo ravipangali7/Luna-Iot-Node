@@ -3,8 +3,8 @@ require('dotenv').config();
 
 class TCPClientService {
     constructor() {
-        this.host = '82.180.145.220';
-        this.port = 6666;
+        this.host = '103.96.247.92';
+        this.port = 4010;
         this.client = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
